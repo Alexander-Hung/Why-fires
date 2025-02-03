@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MODIS Data Viewer</title>
+</head>
+<body>
+    <h1>MODIS Data Viewer</h1>
+
+    <!-- Form to Fetch Entire CSV for Year and Country -->
+    <form onsubmit="fetchYearCountryData(); return false;">
+        <h2>Fetch Data by Year and Country</h2>
+        <input type="text" id="yearInputData" placeholder="Year" required>
+        <input type="text" id="countryInputData" placeholder="Country" required>
+        <button type="submit">Fetch Data</button>
+    </form>
+    <div id="dataResults">
+        <h2>Year and Country Data</h2>
+        <pre id="dataContainer"></pre>
+    </div>
+
+    <!-- Form to Fetch Specific Data Point -->
+    <form onsubmit="fetchDataDetail(); return false;">
+        <h2>Fetch Specific Data Point</h2>
+        <input type="text" id="yearInput" placeholder="Year" required>
+        <input type="text" id="countryInput" placeholder="Country" required>
+        <input type="text" id="latitudeInput" placeholder="Latitude" required>
+        <input type="text" id="longitudeInput" placeholder="Longitude" required>
+        <input type="text" id="acqDateInput" placeholder="Acquisition Date (YYYY-MM-DD)" required>
+        <input type="text" id="acqTimeInput" placeholder="Acquisition Time" required>
+        <button type="submit">Fetch Details</button>
+    </form>
+    <div id="dataDetails">
+        <h2>Data Point Details</h2>
+        <pre id="detailsContainer"></pre>
+    </div>
+
+    <!-- Form to Fetch Available Countries for a Given Year -->
+    <form onsubmit="fetchCountries(); return false;">
+        <h2>Fetch Available Countries for Year</h2>
+        <input type="text" id="countriesYearInput" placeholder="Year" required>
+        <button type="submit">Get Countries</button>
+    </form>
+    <div id="countriesResults">
+        <h2>Available Countries</h2>
+        <pre id="countriesContainer"></pre>
+    </div>
+
+    <script>
+        // Function to fetch entire CSV data for year and country
+        function fetchYearCountryData() {
+            const year = document.getElementById('yearInputData').value;
+            const country = document.getElementById('countryInputData').value;
+
+            fetch(`/api/data?year=${year}&country=${country}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('dataContainer').textContent = JSON.stringify(data, null, 2);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Function to fetch specific data point details
+        function fetchDataDetail() {
+            const data = {
+                year: document.getElementById('yearInput').value,
+                country: document.getElementById('countryInput').value,
+                latitude: document.getElementById('latitudeInput').value,
+                longitude: document.getElementById('longitudeInput').value,
+                acq_date: document.getElementById('acqDateInput').value,
+                acq_time: document.getElementById('acqTimeInput').value,
+            };
+
+            fetch('/api/detail', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('detailsContainer').textContent = JSON.stringify(data, null, 2);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Function to fetch available countries for a given year
+        function fetchCountries() {
+            const year = document.getElementById('countriesYearInput').value;
+
+            fetch(`/api/countries?year=${year}`)
+                .then(response => response.json())
+                .then(countries => {
+                    document.getElementById('countriesContainer').textContent = JSON.stringify(countries, null, 2);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('countriesContainer').textContent = 'No data available for this year.';
+                });
+        }
+    </script>
+</body>
+</html>

@@ -51,7 +51,7 @@ body {
     -ms-overflow-style: none;  /* Internet Explorer 10+ */
     scrollbar-width: none;  /* Firefox */
     position: fixed;
-    width: 18em;
+    width: 20em;
     height: 100vh;
     padding: 1em;
     top: 0;
@@ -62,7 +62,7 @@ body {
 }
 
 .sidebar-footer {
-  width: 18em;
+  width: 20em;
   padding: 1em;
   position: absolute;
   bottom: 0;
@@ -91,7 +91,7 @@ body {
     height: 60px;
     position: absolute;
     top: 48%;
-    left: 24em;
+    left: 26.4em;
     align-self: center;
     cursor: pointer;
     transition: .5s;
@@ -382,24 +382,6 @@ input[type="date"] {
 
 ::-webkit-calendar-picker-indicator:hover {
     filter: invert(80%) sepia(39%) saturate(6499%) hue-rotate(356deg) brightness(103%) contrast(91%);
-}
-
-#toggle3D  {
-    width: 16em;
-    height: 3em;
-    background-color: var(--primaryColor);
-    border-radius: .25em;
-    border: none;
-    color: #fff;
-    cursor: pointer;
-    font-size: 18px;
-    padding: 9px 20px 8px;
-    text-align: center;
-    transition: .25s all ease;
-}
-
-#toggle3D:hover {
-    color: var(--toggleColor);
 }
 
 #legendToggle  {
