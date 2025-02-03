@@ -129,6 +129,7 @@ function loadData() {
 
   if (!year || !rawCountry) {
     console.log("Year or country not selected yet");
+    create2DMap();
     return;
   }
 
@@ -189,10 +190,10 @@ function applyFrontEndFilters() {
   const typeAV = document.getElementById('typeAV').checked;
   if (!typePVF || !typeOSLS || !typeO || !typeAV) {
     filteredData = filteredData.filter(d => {
-      if (typePVF && d.type === '0') return true;
-      if (typeOSLS && d.type === '2') return true;
-      if (typeO && d.type === '3') return true;
-      if (typeAV && d.type === '1') return true;
+      if (typePVF && d.type === 0) return true;
+      if (typeOSLS && d.type === 2) return true;
+      if (typeO && d.type === 3) return true;
+      if (typeAV && d.type === 1) return true;
       return false;
     });
   }
@@ -246,47 +247,97 @@ function updateDateRange() {
 /*                CREATE MAP (2D)                 */
 /**************************************************/
 function create2DMap(data) {
-  if (!data || data.length === 0) {
-    clearMap();
-    return;
-  }
-
   const container = document.getElementById('map2D');
   container.style.display = 'block';
 
-  let minBrightness = Infinity;
-  let maxBrightness = -Infinity;
+  // Decide map center and zoom.
+  // You can adjust these defaults or override them based on user selections.
+  let centerZoom = {
+    center: { lat: 20, lon: 0 },
+    zoom: 2
+  };
 
-  data.forEach(d => {
-    if (d.bright_t31 !== undefined) {
-      const val = Number(d.bright_t31);
-      if (val < minBrightness) minBrightness = val;
-      if (val > maxBrightness) maxBrightness = val;
+  // Prepare layout and config for the map
+  let layout, config;
+
+  // We’ll define separate trace, layout, and config depending on data presence.
+  if (!data || data.length === 0) {
+    // ──────────────────────────────────────────────────────────
+    // Case: No data
+    // ──────────────────────────────────────────────────────────
+    console.log("No data to plot. Displaying empty map.");
+
+    // Create an empty trace for Plotly (this ensures the map still renders)
+    const emptyTrace = {
+      type: 'scattermapbox',
+      mode: 'markers',
+      lat: [],
+      lon: [],
+      hoverinfo: 'none', // No hover info
+      marker: {
+        size: 1, // can be 0 or 1 to be invisible
+        color: 'rgba(0,0,0,0)' // transparent
+      },
+      showlegend: false
+    };
+
+    layout = {
+      autosize: true,
+      mapbox: {
+        style: 'carto-positron',
+        center: centerZoom.center,
+        zoom: centerZoom.zoom
+      },
+      margin: { l: 0, r: 0, b: 0, t: 0 }
+    };
+
+    config = {
+      responsive: true,
+      displayModeBar: false,
+      mapboxAccessToken: 'YOUR_MAPBOX_ACCESS_TOKEN'
+    };
+
+    // Plot the empty trace
+    Plotly.newPlot('map2D', [emptyTrace], layout, config);
+
+    // Optionally, show a message in your detail container (or anywhere):
+    openDetailContainer("No data to display for this selection.");
+
+  } else {
+    // ──────────────────────────────────────────────────────────
+    // Case: We have data
+    // ──────────────────────────────────────────────────────────
+
+    // (Optional) compute your color scale, brightness, etc.
+    let minBrightness = Infinity;
+    let maxBrightness = -Infinity;
+    data.forEach(d => {
+      if (d.bright_t31 !== undefined) {
+        const val = Number(d.bright_t31);
+        if (val < minBrightness) minBrightness = val;
+        if (val > maxBrightness) maxBrightness = val;
+      }
+    });
+    if (minBrightness === Infinity || maxBrightness === -Infinity) {
+      minBrightness = 0;
+      maxBrightness = 100;
     }
-  });
 
-  if (minBrightness === Infinity || maxBrightness === -Infinity) {
-    minBrightness = 0;
-    maxBrightness = 100;
-  }
+    // color for each point
+    const colors = data.map(d => brightnessToColor(d.bright_t31, minBrightness, maxBrightness));
 
-  const colors = data.map(d => brightnessToColor(d.bright_t31, minBrightness, maxBrightness));
-  updateColorRangeBar(minBrightness, maxBrightness);
+    // (Optional) update color scale bar
+    updateColorRangeBar(minBrightness, maxBrightness);
 
-  const rawCountry = document.getElementById('countryFilter').value;
-  const country = rawCountry.replace(/\s/g, '_'); // keep consistent
-  let centerZoom = countriesCenterZoom[country] || { center: { lat: 20, lon: 0 }, zoom: 2 };
-
-  let trace = [
-    {
+    const normalTrace = {
       type: 'scattermapbox',
       mode: 'markers',
       lat: data.map(d => d.latitude),
       lon: data.map(d => d.longitude),
       text: data.map(d => `Lat: ${d.latitude}, Lon: ${d.longitude}`),
       hoverinfo: 'text',
-      // customdata will be used in the click event
       customdata: data.map(d => ({
+        // For /api/detail or your detail container
         latitude: d.latitude,
         longitude: d.longitude,
         acq_date: d.acq_date,
@@ -298,34 +349,34 @@ function create2DMap(data) {
         opacity: 0.8
       },
       showlegend: false
-    }
-  ];
+    };
 
-  let layout = {
-    autosize: true,
-    mapbox: {
-      style: 'carto-positron',
-      center: centerZoom.center,
-      zoom: centerZoom.zoom
-    },
-    margin: { l: 0, r: 0, b: 0, t: 0, pad: 0 },
-    paper_bgcolor: '#191A1A',
-    plot_bgcolor: '#191A1A'
-  };
+    layout = {
+      autosize: true,
+      mapbox: {
+        style: 'carto-positron',
+        center: centerZoom.center,
+        zoom: centerZoom.zoom
+      },
+      margin: { l: 0, r: 0, b: 0, t: 0 }
+    };
 
-  let config = {
-    responsive: true,
-    displayModeBar: false,
-    // Put your own or a valid Mapbox access token here
-    mapboxAccessToken: 'YOUR_MAPBOX_ACCESS_TOKEN'
-  };
+    config = {
+      responsive: true,
+      displayModeBar: false,
+      mapboxAccessToken: 'YOUR_MAPBOX_ACCESS_TOKEN'
+    };
 
-  Plotly.newPlot('map2D', trace, layout, config);
+    // Now plot the real data
+    Plotly.newPlot('map2D', [normalTrace], layout, config);
 
-  const map2D = document.getElementById('map2D');
-  map2D.on('plotly_click', handleMapClick);
+    // Add click event for details
+    const map2D = document.getElementById('map2D');
+    map2D.on('plotly_click', handleMapClick);
 
-  openDetailContainer("Select a point to learn more about the wildfire.");
+    // Show a default message
+    openDetailContainer("Select a point to learn more about the wildfire.");
+  }
 }
 
 /**************************************************/
