@@ -5,20 +5,15 @@
 let mousePosition = { x: 0, y: 0 };
 
 const typeMapping = {
-  '0': 'Presumed Vegetation Fire',
-  '1': 'Active Volcano',
-  '2': 'Other Static Land Source',
-  '3': 'Offshore'
+  0: 'Presumed Vegetation Fire',
+  1: 'Active Volcano',
+  2: 'Other Static Land Source',
+  3: 'Offshore'
 };
 
 const dayNightMapping = {
   'D': 'Daytime Fire',
   'N': 'Nighttime Fire'
-};
-
-const dayNightStyle = {
-  'D': 'light',
-  'N': 'dark'
 };
 
 const monthText = {
@@ -37,11 +32,17 @@ const monthText = {
   12: 'December'
 };
 
-// Example center/zoom for countries
-const countriesCenterZoom = {
-  'United_States': { center: { lat: 37.0902, lon: -95.7129 }, zoom: 4 },
-  // Add more if needed, ensuring the country key matches your underscore usage
-};
+let countriesData = null;
+
+fetch('http://localhost:5000/api/countriesMeta')
+    .then(response => response.json())
+    .then(json => {
+      countriesData = json;
+      console.log('Loaded country lat/lon and zoom data:', countriesData);
+    })
+    .catch(err => {
+      console.error('Error loading countries.json:', err);
+    });
 
 let currentData = [];
 
@@ -98,12 +99,12 @@ document.getElementById('countryFilter').addEventListener('change', loadData);
 function fetchCountries(year) {
   const url = `http://localhost:5000/api/countries?year=${year}`;
 
-  console.log('Fetching countries from:', url);
+  //console.log('Fetching countries from:', url);
 
   fetch(url)
       .then(response => response.json())
       .then(data => {
-        console.log('Countries fetched:', data);
+        //console.log('Countries fetched:', data);
 
         const countrySelect = document.getElementById('countryFilter');
         countrySelect.innerHTML = '<option value="">Select Country</option>';
@@ -138,12 +139,12 @@ function loadData() {
 
   const url = `http://localhost:5000/api/data?year=${year}&country=${encodeURIComponent(country)}`;
 
-  console.log('Fetching data from:', url);
+  //console.log('Fetching data from:', url);
 
   fetch(url)
       .then(response => response.json())
       .then(data => {
-        console.log('Data fetched:', data);
+        //console.log('Data fetched:', data);
 
         if (data.error) {
           console.error(data.error);
@@ -213,7 +214,7 @@ function applyFrontEndFilters() {
     filteredData = filteredData.filter(d => d.acq_date === dateFilter);
   }
 
-  console.log('Filtered data:', filteredData);
+  //console.log('Filtered data:', filteredData);
 
   create2DMap(filteredData);
   updateDataCount(filteredData.length);
@@ -250,12 +251,22 @@ function create2DMap(data) {
   const container = document.getElementById('map2D');
   container.style.display = 'block';
 
+  const selectedCountry = document.getElementById('countryFilter').value;
+
   // Decide map center and zoom.
-  // You can adjust these defaults or override them based on user selections.
-  let centerZoom = {
-    center: { lat: 20, lon: 0 },
-    zoom: 2
-  };
+  let mapCenter = { lat: 20, lon: 0 };
+  let mapZoom = 2;
+
+  if (countriesData && selectedCountry && countriesData.countriesLonLat[selectedCountry]) {
+    // 1) Get lat/lon from the JSON
+    mapCenter = {
+      lat: countriesData.countriesLonLat[selectedCountry].lat,
+      lon: countriesData.countriesLonLat[selectedCountry].lon
+    };
+
+    // 2) Get zoom from the JSON
+    mapZoom = countriesData.countriesZoom[selectedCountry];
+  }
 
   // Prepare layout and config for the map
   let layout, config;
@@ -285,8 +296,8 @@ function create2DMap(data) {
       autosize: true,
       mapbox: {
         style: 'carto-positron',
-        center: centerZoom.center,
-        zoom: centerZoom.zoom
+        center: mapCenter,
+        zoom: mapZoom
       },
       margin: { l: 0, r: 0, b: 0, t: 0 }
     };
@@ -309,11 +320,11 @@ function create2DMap(data) {
     // ──────────────────────────────────────────────────────────
 
     // (Optional) compute your color scale, brightness, etc.
-    let minBrightness = Infinity;
-    let maxBrightness = -Infinity;
+    let minBrightness = data.reduce((min, p) => p.brightness < min ? p.brightness : min, data[0].brightness);
+    let maxBrightness = data.reduce((max, p) => p.brightness > max ? p.brightness : max, data[0].brightness);
     data.forEach(d => {
-      if (d.bright_t31 !== undefined) {
-        const val = Number(d.bright_t31);
+      if (d.brightness !== undefined) {
+        const val = Number(d.brightness);
         if (val < minBrightness) minBrightness = val;
         if (val > maxBrightness) maxBrightness = val;
       }
@@ -324,7 +335,7 @@ function create2DMap(data) {
     }
 
     // color for each point
-    const colors = data.map(d => brightnessToColor(d.bright_t31, minBrightness, maxBrightness));
+    const colors = data.map(d => brightnessToColor(d.brightness, minBrightness, maxBrightness));
 
     // (Optional) update color scale bar
     updateColorRangeBar(minBrightness, maxBrightness);
@@ -355,8 +366,8 @@ function create2DMap(data) {
       autosize: true,
       mapbox: {
         style: 'carto-positron',
-        center: centerZoom.center,
-        zoom: centerZoom.zoom
+        center: mapCenter,
+        zoom: mapZoom
       },
       margin: { l: 0, r: 0, b: 0, t: 0 }
     };
@@ -386,9 +397,7 @@ function brightnessToColor(value, minVal, maxVal) {
   if (value === undefined) {
     return 'gray';
   }
-  const numericVal = Number(value);
-  const ratio = (numericVal - minVal) / (maxVal - minVal + 0.00001);
-  const hue = (1 - ratio) * 240;
+  const hue = (1 - value / maxVal) * 150;
   return `hsl(${hue}, 100%, 50%)`;
 }
 
@@ -435,7 +444,7 @@ function handleMapClick(data) {
     acq_time: detailParams.acq_time.toString()  // or empty string if needed
   };
 
-  console.log('Detail request body:', bodyData);
+  //console.log('Detail request body:', bodyData);
 
   fetch('http://localhost:5000/api/detail', {
     method: 'POST',
@@ -444,7 +453,7 @@ function handleMapClick(data) {
   })
       .then(response => response.json())
       .then(detail => {
-        console.log('Detail fetched:', detail);
+        //console.log('Detail fetched:', detail);
 
         if (!detail || detail === 'error' || detail.length === 0) {
           openDetailContainer("No detail found for this point.");
@@ -466,10 +475,10 @@ function buildDetailHTML(record) {
   const time = record.acq_time || 'unknown time';
   const lat = record.latitude || 'unknown lat';
   const lon = record.longitude || 'unknown lon';
-  const bright = record.bright_t31 || 'N/A';
+  const bright = record.brightness || 'N/A';
   const satellite = record.satellite || 'unknown';
   const daynight = record.daynight ? dayNightMapping[record.daynight] : 'unknown';
-  const typeDesc = record.type ? (typeMapping[record.type] || 'Unknown') : 'Unknown';
+  const typeDesc = typeMapping[record.type] || 'unknown';
 
   // If your data already has "HHMM" format, you can transform it if you want
   const formattedTime = formatTime(time);
@@ -490,7 +499,7 @@ function buildDetailHTML(record) {
     </div>
     <br />
     <div style="font-size: 18px;">
-      <b>Brightness:</b> ${bright} K <br />
+      <b>Temperature:</b> ${bright} K <br />
       <b>Type:</b> ${typeDesc}
     </div>
     <br />
@@ -501,13 +510,23 @@ function buildDetailHTML(record) {
 /**************************************************/
 /*                 HELPER FUNCTIONS               */
 /**************************************************/
-function formatTime(timeStr) {
-  if (typeof timeStr === 'string' && timeStr) {
-    // e.g. '1305' -> '13:05'
-    return timeStr.padStart(4, '0').replace(/^(..)(..)$/, '$1:$2');
-  } else {
+function formatTime(timeVal) {
+  if (timeVal == null) {
     return 'Time not available';
   }
+
+  // Convert input to a string
+  let timeStr = String(timeVal);
+
+  // Left-pad to 4 digits: e.g., '659' => '0659'
+  // Then use regex to insert a colon: '0659' => '06:59'
+  timeStr = timeStr.padStart(4, '0').replace(/^(..)(..)$/, '$1:$2');
+
+  // If it's an unexpected format or empty, return a fallback
+  if (!timeStr.includes(':')) {
+    return 'Time not available';
+  }
+  return timeStr;
 }
 
 function updateDataCount(count) {

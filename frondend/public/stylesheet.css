@@ -427,7 +427,7 @@ input[type="date"] {
     width: 17px;
     height: 17px;
     border-radius: 50%;
-    background: white;
+    background: black;
     box-shadow: 2px 2px 5px 0px rgba(0, 0, 0, 1);
 }
 

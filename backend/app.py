@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import glob
 from flask_cors import CORS, cross_origin
+import json
 
 app = Flask(__name__, template_folder='public')
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
@@ -20,6 +21,7 @@ def index():
 def get_data():
     year = request.args.get('year')
     country = request.args.get('country')
+    country = country.replace('_', ' ')
     file_path = f'./data/processed/{year}/{country}.csv'
 
     if not os.path.isfile(file_path):
@@ -67,6 +69,20 @@ def get_countries():
     # Return a JSON response with the year and list of countries
     return jsonify({'year': year, 'countries': countries})
 
+
+@app.route('/api/countriesMeta', methods=['GET'])
+@cross_origin(origins='http://localhost:3000')
+def get_countries_meta():
+    """
+    Reads data/countries.json and returns it as JSON.
+    """
+    file_path = './data/countires.json'
+    if not os.path.exists(file_path):
+        return jsonify({"error": "countries.json not found"}), 404
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    return jsonify(data)
 
 
 if __name__ == '__main__':

@@ -7,6 +7,17 @@
 <body>
     <h1>MODIS Data Viewer</h1>
 
+        <!-- Form to Fetch Available Countries for a Given Year -->
+    <form onsubmit="fetchCountries(); return false;">
+        <h2>Fetch Available Countries for Year</h2>
+        <input type="text" id="countriesYearInput" placeholder="Year" required>
+        <button type="submit">Get Countries</button>
+    </form>
+    <div id="countriesResults">
+        <h2>Available Countries</h2>
+        <pre id="countriesContainer"></pre>
+    </div>
+
     <!-- Form to Fetch Entire CSV for Year and Country -->
     <form onsubmit="fetchYearCountryData(); return false;">
         <h2>Fetch Data by Year and Country</h2>
@@ -33,17 +44,6 @@
     <div id="dataDetails">
         <h2>Data Point Details</h2>
         <pre id="detailsContainer"></pre>
-    </div>
-
-    <!-- Form to Fetch Available Countries for a Given Year -->
-    <form onsubmit="fetchCountries(); return false;">
-        <h2>Fetch Available Countries for Year</h2>
-        <input type="text" id="countriesYearInput" placeholder="Year" required>
-        <button type="submit">Get Countries</button>
-    </form>
-    <div id="countriesResults">
-        <h2>Available Countries</h2>
-        <pre id="countriesContainer"></pre>
     </div>
 
     <script>
