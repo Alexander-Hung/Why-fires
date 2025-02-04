@@ -38,7 +38,7 @@ fetch('http://localhost:5000/api/countriesMeta')
     .then(response => response.json())
     .then(json => {
       countriesData = json;
-      console.log('Loaded country lat/lon and zoom data:', countriesData);
+      //console.log('Loaded country lat/lon and zoom data:', countriesData);
     })
     .catch(err => {
       console.error('Error loading countries.json:', err);
@@ -345,7 +345,7 @@ function create2DMap(data) {
       mode: 'markers',
       lat: data.map(d => d.latitude),
       lon: data.map(d => d.longitude),
-      text: data.map(d => `Lat: ${d.latitude}, Lon: ${d.longitude}`),
+      text: data.map(d => `${selectedCountry}(${d.latitude}, ${d.longitude}), ${d.brightness}K`),
       hoverinfo: 'text',
       customdata: data.map(d => ({
         // For /api/detail or your detail container
@@ -356,7 +356,7 @@ function create2DMap(data) {
       })),
       marker: {
         color: colors,
-        size: 12,
+        size: 6,
         opacity: 0.8
       },
       showlegend: false
@@ -412,7 +412,7 @@ function updateColorRangeBar(minValue, maxValue) {
 
   const colorRangeRange = document.getElementById('colorRangeRange');
   colorRangeRange.innerHTML = `
-    <div>
+    <div style="color: black">
       ${maxValue.toFixed(0)} K
       <br><br><br><br><br><br><br><br><br>
       ${minValue.toFixed(0)} K
@@ -483,11 +483,10 @@ function buildDetailHTML(record) {
   // If your data already has "HHMM" format, you can transform it if you want
   const formattedTime = formatTime(time);
 
+  const country = document.getElementById('countryFilter').value;
+
   return `
-    <div>
-      <b style="font-size: 24px;">Details</b>
-    </div>
-    <br />
+    <div><h2><b>${country}</b></h2></div>
     <div style="font-size: 18px;">
       <b>Date:</b> ${date} <br />
       <b>Time:</b> ${formattedTime} UTC (${daynight})
@@ -584,15 +583,5 @@ function expandContract2() {
   const content = document.getElementById("expandContract2");
   content.classList.toggle('expanded');
   content.classList.toggle('collapsed');
-}
-
-const showNumInput = document.getElementById("showNumDataInput");
-if (showNumInput) {
-  showNumInput.addEventListener("keypress", function(event) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      document.getElementById("showNumDataButton").click();
-    }
-  });
 }
 /**************************************************/
