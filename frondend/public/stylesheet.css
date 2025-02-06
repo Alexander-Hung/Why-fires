@@ -254,9 +254,43 @@ select {
   transition: .25s all ease;
 }
 
-/* Styles for nope2 (assuming it's a different element) */
-#nope2 {
-  /* Define styles for nope2 as needed */
+/* Styles for topSection2 */
+#topSection3 {
+    margin-top: 1em;
+    border-radius: .25em;
+    background-color: var(--primaryColor);
+    height: 3em;
+    box-sizing: border-box;
+}
+
+#topTitle3 {
+    display: inline-block;
+    padding: 15px;
+}
+
+#topButton3 {
+    display: inline;
+    float: right;
+    width: 3em;
+    height: 3em;
+}
+
+#topButton3 button {
+    width: 100%;
+    height: 100%;
+    background-color: var(--secondaryColor);
+    border: 0;
+    border-radius: 0px .25em .25em 0px;
+}
+
+#topButton3 button::after {
+    content: '\25BC';
+    color: #fff;
+}
+
+#topButton3 button:hover::after {
+    color: var(--toggleColor);
+    transition: .25s all ease;
 }
 
 /* Styles for expandContainer2 */
@@ -281,6 +315,29 @@ select {
 
 #expandContract2.expanded {
   margin-top: 0;
+}
+
+#expandContainer3 {
+    overflow: hidden;
+    background-color: var(--primaryColor);
+    padding: 0px;
+    transition: all 0.5s;
+}
+
+#expandContainer3.expanded {
+    overflow: hidden;
+    background-color: var(--primaryColor);
+    padding: 15px;
+}
+
+/* Styles for expandContract2 */
+#expandContract3 {
+    margin-top: -100%;
+    transition: all 0.5s;
+}
+
+#expandContract3.expanded {
+    margin-top: 0;
 }
 
 /* End of Type Container */
@@ -441,10 +498,50 @@ input[type="date"] {
   color: black;
 }
 
-#showNumData {
+#forecastButton {
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    padding: 5px;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border: white solid 2px;
+    color: white;
+    background: var(--primaryColor);
+}
+
+#forecastButton:hover {
+    color: var(--toggleColor);
+    transition: .25s all ease;
+    text-decoration-line: none;
+}
+
+.input {
   padding: 1em;
   border-radius: 5px;
+    border: none;
   background-color: var(--primaryColor);
+}
+
+input[type="text"] {
+    margin: 0.5em;
+    width: 14em;
+    color: white;
+}
+
+input[type="number"] {
+    margin: 0.5em;
+    width: 14em;
+    color: white;
+}
+
+::placeholder {
+    color: white;
+}
+
+#mapKeyInput {
+    margin-top: 0em;
 }
 
 .tooltip {

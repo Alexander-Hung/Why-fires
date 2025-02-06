@@ -141,6 +141,45 @@
               </div>
             </div>
 
+            <div>
+              <div id="topSection3"> <!-- Always displays -->
+                <div id="topTitle3">Prediction</div>
+                <div id="topButton3">
+                  <button id="nope3" onclick="expandContract3()"></button>
+                </div>
+              </div>
+
+              <div id="expandContainer3" class="collapsed">
+                <div id="expandContract3" class="collapsed">
+                  <div>
+                    <input class="input" type="text" id="mapKeyInput" placeholder="Enter Map Key" />
+                  </div>
+                  <div>
+                    <input class="input" type="number" id="daysInput" placeholder="Days(max 10)" min="1" max="10" />
+                  </div>
+                  <div>
+                    <input class="input" type="number" id="periodsInput" placeholder="Periods(e.g., 10)" />
+                  </div>
+                  <div>
+                    <br>
+                    <span><b>Start Date:</b></span>
+                    <input class="input" type="date" id="startDateInput" />
+                  </div>
+
+                  <div>
+                    <div style="margin: 0.5em;"><button id="forecastButton">Prediction</button></div>
+
+                    <a id="phaseDisplay">Phase: </a>
+                    <progress id="progressBar" value="0" max="100"></progress>
+                    <a id="progressDisplay">0%</a>
+                  </div>
+
+                  <div id="annualCounts"></div>
+                  <div id="forecastContainer"></div>
+                </div>
+              </div>
+            </div>
+
           </div> <!-- id dateContainer -->
         </div>
         <br />

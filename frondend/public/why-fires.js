@@ -589,4 +589,105 @@ function expandContract2() {
   content.classList.toggle('expanded');
   content.classList.toggle('collapsed');
 }
+
+function expandContract3() {
+  const container = document.getElementById("expandContainer3");
+  container.classList.toggle('expanded');
+  container.classList.toggle('collapsed');
+
+  const content = document.getElementById("expandContract3");
+  content.classList.toggle('expanded');
+  content.classList.toggle('collapsed');
+}
+
+/**************************************************/
+/*          PREDICTION BOX            */
+/**************************************************/
+
+// Start the forecast streaming by creating an EventSource connection.
+function startForecastStream(payload) {
+  // Build query string from payload parameters.
+  // (Since EventSource only supports GET, we send parameters as query strings.)
+  const urlParams = new URLSearchParams({
+    country_name: payload.country_name,
+    map_key: payload.map_key,
+    days: payload.days,
+    start_date: payload.start_date,
+    periods: payload.periods
+  });
+  const url = `http://localhost:5000/api/forecast_stream?${urlParams.toString()}`;
+  console.log("Opening EventSource to:", url);
+
+  // Create EventSource connection.
+  const eventSource = new EventSource(url);
+
+  eventSource.onmessage = function(event) {
+    // Each message from the backend is a JSON string.
+    console.log("Received SSE message:", event.data);
+    try {
+      const data = JSON.parse(event.data);
+      if (data.progress !== undefined) {
+        // Update progress bar
+        document.getElementById("progressBar").value = data.progress;
+        document.getElementById("progressDisplay").textContent = `${data.progress}%`;
+        document.getElementById("phaseDisplay").textContent = `${data.phase}: `;
+      }
+      // When final results are sent, they include annual_fire_counts and probabilities.
+      if (data.progress === 100 && data.annual_fire_counts && data.probabilities) {
+        displayForecastResults(data);
+        eventSource.close(); // Close the SSE connection once complete.
+      }
+    } catch (err) {
+      console.error("Error parsing SSE message:", err);
+    }
+  };
+
+  eventSource.onerror = function(error) {
+    console.error("SSE connection error:", error);
+    eventSource.close();
+  };
+}
+
+// Update the UI with final forecast results.
+function displayForecastResults(result) {
+  // Update the annual fire counts display.
+  const annualCountsContainer = document.getElementById("annualCounts");
+  annualCountsContainer.innerHTML = ""; // Clear previous content.
+  for (const [year, count] of Object.entries(result.annual_fire_counts)) {
+    const p = document.createElement("p");
+    p.textContent = `Year ${year}: ${count} fires`;
+    annualCountsContainer.appendChild(p);
+  }
+
+  // Update the forecast probabilities display.
+  const forecastContainer = document.getElementById("forecastContainer");
+  forecastContainer.innerHTML = ""; // Clear previous content.
+  result.probabilities.forEach(item => {
+    const p = document.createElement("p");
+    p.textContent = `${item.date}: ${item.fire_probability.toFixed(2)}% probability`;
+    forecastContainer.appendChild(p);
+  });
+}
+
+// Attach a click listener to the forecast button.
+document.getElementById("forecastButton").addEventListener("click", function() {
+  // Gather inputs from the UI.
+  const country_name = document.getElementById("countryFilter").value;
+  const map_key = document.getElementById("mapKeyInput").value;
+  const days = document.getElementById("daysInput").value;
+  const periods = document.getElementById("periodsInput").value;
+  const start_date = document.getElementById("startDateInput").value;
+
+  // Build the payload.
+  const payload = { country_name, map_key, days, start_date, periods };
+
+  // Clear previous results and reset the progress bar.
+  document.getElementById("progressBar").value = 0;
+  document.getElementById("annualCounts").innerHTML = "";
+  document.getElementById("forecastContainer").innerHTML = "";
+
+  // Start the SSE connection to stream progress and results.
+  startForecastStream(payload);
+});
+
 /**************************************************/
