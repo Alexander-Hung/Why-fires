@@ -38,5 +38,5 @@ def process_modis_data(start_year, end_year):
 
 
 if __name__ == '__main__':
-    max_year = 2023
+    max_year = 2024
     process_modis_data(2001, max_year)

@@ -8,7 +8,8 @@ const typeMapping = {
   0: 'Presumed Vegetation Fire',
   1: 'Active Volcano',
   2: 'Other Static Land Source',
-  3: 'Offshore'
+  3: 'Offshore',
+  99: 'UNKNOWN'
 };
 
 const dayNightMapping = {
@@ -229,7 +230,7 @@ function updateDateRange() {
   const month = document.getElementById('monthSlider').value;
 
   let minDate, maxDate;
-  if (month === "0") {
+  if (month === "0") { // This indicates a year-wide range
     minDate = `${year}-01-01`;
     maxDate = `${year}-12-31`;
   } else {
@@ -239,10 +240,14 @@ function updateDateRange() {
     document.getElementById('monthDisplay').textContent = monthText[month];
   }
 
+  // Update the date range of the dateFilter element
   const dateFilterEl = document.getElementById('dateFilter');
   dateFilterEl.setAttribute('min', minDate);
   dateFilterEl.setAttribute('max', maxDate);
 }
+
+// Add an event listener to the yearSlider to trigger updateDateRange whenever it changes
+document.getElementById('yearSlider').addEventListener('change', updateDateRange);
 
 /**************************************************/
 /*                CREATE MAP (2D)                 */
