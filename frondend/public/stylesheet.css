@@ -124,7 +124,7 @@ body {
     -ms-overflow-style: none;  /* Internet Explorer 10+ */
     scrollbar-width: none;  /* Firefox */
     position: fixed;
-    width: 70%;
+    width: 75em;
     height: 60em;
     padding: 1em;
     top: 10em;
@@ -146,7 +146,7 @@ body {
 }
 
 .rightSidebar-toggle.is-open {
-    right: 70.9%;
+    right: 92.4em;
 }
 
 .rightSidebar-toggle {
