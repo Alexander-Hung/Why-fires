@@ -561,13 +561,25 @@ function clearMap() {
 /*          SIDEBAR AND MISCELLANEOUS            */
 /**************************************************/
 const toggleBtn = document.querySelector('.sidebar-toggle');
+const rightToggleBtn = document.querySelector('.rightSidebar-toggle');
+const rightSidebar = document.querySelector('.rightSidebar');
 const sidebar = document.querySelector('.sidebar');
 const sidebarFooter = document.querySelector('.sidebar-footer');
+const colorRangeBar = document.querySelector('#colorRangeBar');
+const colorRangeRange = document.querySelector('#colorRangeRange');
 
 toggleBtn.addEventListener('click', () => {
   toggleBtn.classList.toggle('is-closed');
   sidebar.classList.toggle('is-closed');
   sidebarFooter.classList.toggle('is-closed');
+});
+
+rightToggleBtn.addEventListener('click', () => {
+  rightToggleBtn.classList.toggle('is-open');
+  rightSidebar.classList.toggle('is-open');
+
+  colorRangeBar.classList.toggle('toggle-display');
+  colorRangeRange.classList.toggle('toggle-display');
 });
 
 function expandContract() {
@@ -604,7 +616,6 @@ function expandContract3() {
 /*          PREDICTION BOX            */
 /**************************************************/
 
-// Start the forecast streaming by creating an EventSource connection.
 function startForecastStream(payload) {
   // Build query string from payload parameters.
   // (Since EventSource only supports GET, we send parameters as query strings.)
@@ -627,14 +638,21 @@ function startForecastStream(payload) {
     try {
       const data = JSON.parse(event.data);
       if (data.progress !== undefined) {
-        // Update progress bar
+        // Update the progress overlay elements
         document.getElementById("progressBar").value = data.progress;
         document.getElementById("progressDisplay").textContent = `${data.progress}%`;
         document.getElementById("phaseDisplay").textContent = `${data.phase}: `;
       }
-      // When final results are sent, they include annual_fire_counts and probabilities.
+      // When final results are sent, hide the progress overlay and show ML results.
       if (data.progress === 100 && data.annual_fire_counts && data.probabilities) {
-        displayForecastResults(data);
+        // Hide the progress overlay
+        document.getElementById("progressOverlay").style.display = "none";
+        // Reveal the results container
+        document.getElementById("mlResults").style.display = "flex";
+
+        // Display the forecast results using your existing functions
+        displayAnnualCounts(data.annual_fire_counts);
+        displayForecastCalendar(data.probabilities);
         eventSource.close(); // Close the SSE connection once complete.
       }
     } catch (err) {
@@ -648,28 +666,119 @@ function startForecastStream(payload) {
   };
 }
 
-// Update the UI with final forecast results.
-function displayForecastResults(result) {
-  // Update the annual fire counts display.
-  const annualCountsContainer = document.getElementById("annualCounts");
-  annualCountsContainer.innerHTML = ""; // Clear previous content.
-  for (const [year, count] of Object.entries(result.annual_fire_counts)) {
-    const p = document.createElement("p");
-    p.textContent = `Year ${year}: ${count} fires`;
-    annualCountsContainer.appendChild(p);
-  }
+function displayAnnualCounts(annualCounts) {
+  const trace = {
+    x: Object.keys(annualCounts),
+    y: Object.values(annualCounts),
+    type: 'bar'
+  };
 
-  // Update the forecast probabilities display.
-  const forecastContainer = document.getElementById("forecastContainer");
-  forecastContainer.innerHTML = ""; // Clear previous content.
-  result.probabilities.forEach(item => {
-    const p = document.createElement("p");
-    p.textContent = `${item.date}: ${item.fire_probability.toFixed(2)}% probability`;
-    forecastContainer.appendChild(p);
-  });
+  const layout = {
+    title: 'Annual Fire Counts',
+    xaxis: { title: 'Year' },
+    yaxis: { title: 'Number of Fires' }
+  };
+
+  Plotly.newPlot('annualCounts', [trace], layout);
 }
 
-// Attach a click listener to the forecast button.
+function displayForecastCalendar(probabilities) {
+  const container = document.getElementById('forecastContainer');
+  container.innerHTML = ''; // Clear any existing content
+
+  if (!probabilities.length) {
+    container.textContent = 'No forecast available';
+    return;
+  }
+
+  // Build a lookup mapping from date string ("YYYY-MM-DD") to forecast probability.
+  const forecastMap = {};
+  probabilities.forEach(item => {
+    forecastMap[item.date] = item.fire_probability;
+  });
+
+  // IMPORTANT: Append "T00:00:00" to ensure the date string is interpreted in local time.
+  const forecastStart = new Date(probabilities[0].date + "T00:00:00");
+  const forecastEnd   = new Date(probabilities[probabilities.length - 1].date + "T00:00:00");
+
+  // Compute the grid boundaries:
+  //   Grid start: Sunday of the week containing forecastStart.
+  //   Grid end: Saturday of the week containing forecastEnd.
+  const gridStart = new Date(forecastStart);
+  gridStart.setDate(gridStart.getDate() - gridStart.getDay());
+
+  const gridEnd = new Date(forecastEnd);
+  gridEnd.setDate(gridEnd.getDate() + (6 - gridEnd.getDay()));
+
+  // Create the calendar table and header row.
+  const table = document.createElement('table');
+  table.className = 'calendar-table';
+
+  const headerRow = document.createElement('tr');
+  ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(day => {
+    const th = document.createElement('th');
+    th.textContent = day;
+    headerRow.appendChild(th);
+  });
+  table.appendChild(headerRow);
+
+  // Loop from gridStart to gridEnd (inclusive) one day at a time.
+  let current = new Date(gridStart);
+  let row = document.createElement('tr');
+  let colCount = 0;
+
+  while (current <= gridEnd) {
+    const cell = document.createElement('td');
+
+    // Format the date as "YYYY-MM-DD"
+    const year = current.getFullYear();
+    let month = current.getMonth() + 1; // months are zero-indexed
+    let day = current.getDate();
+    month = (month < 10 ? '0' : '') + month;
+    day   = (day < 10   ? '0' : '') + day;
+    const formattedDate = `${year}-${month}-${day}`;
+
+    // If the current date is within the forecast range, show the data.
+    if (current >= forecastStart && current <= forecastEnd) {
+      let cellContent = `<div class="date-number">${formattedDate}</div>`;
+      if (forecastMap[formattedDate] !== undefined) {
+        cellContent += `<div class="forecast-probability">Probability: ${forecastMap[formattedDate].toFixed(2)}%</div>`;
+      } else {
+        cellContent += `<div class="forecast-probability">No data</div>`;
+      }
+      cell.innerHTML = cellContent;
+    } else {
+      // Dates outside the forecast range are rendered as empty cells.
+      cell.className = 'empty-cell';
+    }
+
+    row.appendChild(cell);
+    colCount++;
+
+    // Once we've added 7 cells (a full week), append the row.
+    if (colCount === 7) {
+      table.appendChild(row);
+      row = document.createElement('tr');
+      colCount = 0;
+    }
+
+    // Move to the next day.
+    current.setDate(current.getDate() + 1);
+  }
+  if (colCount > 0) {
+    table.appendChild(row);
+  }
+
+  // Append the calendar table to the container.
+  container.appendChild(table);
+
+  // Evenly distribute the available container height among all table rows.
+  const totalRows = table.rows.length;
+  for (let i = 0; i < totalRows; i++) {
+    table.rows[i].style.height = (100 / totalRows) + '%';
+  }
+}
+
 document.getElementById("forecastButton").addEventListener("click", function() {
   // Gather inputs from the UI.
   const country_name = document.getElementById("countryFilter").value;
@@ -677,6 +786,19 @@ document.getElementById("forecastButton").addEventListener("click", function() {
   const days = document.getElementById("daysInput").value;
   const periods = document.getElementById("periodsInput").value;
   const start_date = document.getElementById("startDateInput").value;
+
+  // Validate required fields.
+  let missingFields = [];
+  if (!country_name) missingFields.push("Country");
+  if (!map_key) missingFields.push("Map Key");
+  if (!days) missingFields.push("Days");
+  if (!periods) missingFields.push("Periods");
+  if (!start_date) missingFields.push("Start Date");
+
+  if (missingFields.length > 0) {
+    alert("Please fill in the following fields: " + missingFields.join(", "));
+    return; // Stop further execution if any required field is missing.
+  }
 
   // Build the payload.
   const payload = { country_name, map_key, days, start_date, periods };
@@ -686,8 +808,21 @@ document.getElementById("forecastButton").addEventListener("click", function() {
   document.getElementById("annualCounts").innerHTML = "";
   document.getElementById("forecastContainer").innerHTML = "";
 
+  // Show the progress overlay (since the forecast is starting).
+  document.getElementById("progressOverlay").style.display = "flex";
+
   // Start the SSE connection to stream progress and results.
   startForecastStream(payload);
+
+  // Check if the right sidebar is already open.
+  if (!rightSidebar.classList.contains("is-open")) {
+    rightToggleBtn.classList.toggle("is-open");
+    rightSidebar.classList.toggle("is-open");
+  } else {
+    // If the right sidebar is already open, ensure that the color range elements remain hidden.
+    colorRangeBar.classList.add('toggle-display');
+    colorRangeRange.classList.add('toggle-display');
+  }
 });
 
 /**************************************************/

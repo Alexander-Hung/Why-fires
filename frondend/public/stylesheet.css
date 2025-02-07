@@ -14,10 +14,6 @@ body {
     font-size: var(--fontSize);
 }
 
-#map2D, #map3D {
-    height: 100vh;
-}
-
 #detailContainer {
   position: absolute;
   top: 0;
@@ -42,6 +38,10 @@ body {
   position: absolute;
   right: 4%;
   cursor: pointer;
+}
+
+#map2D {
+    height: 100vh;
 }
 
 .sidebar {
@@ -75,15 +75,15 @@ body {
 }
 
 .sidebar.is-closed {
-    transform: translateX(-20em);
+    transform: translateX(-22em);
 }
 
 .sidebar-footer.is-closed {
-    transform: translateX(-20em);
+    transform: translateX(-22em);
 }
 
 .sidebar-toggle.is-closed {
-    transform: translateX(-24em);
+    transform: translateX(-26.5em);
 }
 
 .sidebar-toggle {
@@ -116,6 +116,70 @@ body {
 .sidebar-toggle.is-closed .icon-close {
     display: none;
 }
+
+.rightSidebar {
+    display: flex;
+    justify-content: space-between;
+    overflow-y: auto;
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;  /* Firefox */
+    position: fixed;
+    width: 70%;
+    height: 60em;
+    padding: 1em;
+    top: 10em;
+    bottom: 5em;
+    right: 0;
+    color: white;
+    border-radius: 5px 0 0 5px;
+    background-color: rgba(60, 63, 65, 0.9); /* RGBA for transparency */
+    transform: translateX(100%); /* Start closed */
+    transition: transform 0.5s;
+}
+
+.rightSidebar::-webkit-scrollbar {
+    display: none;  /* Safari and Chrome */
+}
+
+.rightSidebar.is-open {
+    transform: translateX(0); /* Slide in */
+}
+
+.rightSidebar-toggle.is-open {
+    right: 70.9%;
+}
+
+.rightSidebar-toggle {
+    width: 40px;
+    height: 60px;
+    position: fixed;
+    top: 48%;
+    right: 0;
+    align-self: center;
+    cursor: pointer;
+    transition: .5s;
+    border: none;
+    border-radius: 5px 0 0 5px;
+    color: white;
+    background-color: rgba(60, 63, 65, 0.9); /* RGBA for transparency */
+}
+
+.rightSidebar-toggle .icon-open {
+    display: initial; /* Show open icon by default */
+}
+
+.rightSidebar-toggle .icon-close {
+    display: none; /* Hide close icon by default */
+}
+
+.rightSidebar-toggle.is-open .icon-open {
+    display: none; /* Hide open icon when sidebar is open */
+}
+
+.rightSidebar-toggle.is-open .icon-close {
+    display: initial; /* Show close icon when sidebar is open */
+}
+
 
 select {
     appearance: none;
@@ -254,9 +318,8 @@ select {
   transition: .25s all ease;
 }
 
-/* Styles for topSection2 */
+/* Styles for topSection3 */
 #topSection3 {
-    margin-top: 1em;
     border-radius: .25em;
     background-color: var(--primaryColor);
     height: 3em;
@@ -332,7 +395,7 @@ select {
 
 /* Styles for expandContract2 */
 #expandContract3 {
-    margin-top: -100%;
+    margin-top: -110%;
     transition: all 0.5s;
 }
 
@@ -462,6 +525,11 @@ input[type="date"] {
   color: var(--toggleColor);
 }
 
+.toggle-display {
+    display: none;
+    visibility: hidden;
+}
+
 #colorRangeBar {
     display: flex;
     justify-content: center;
@@ -475,6 +543,7 @@ input[type="date"] {
     border-radius: 5px;
     background: linear-gradient(to top, hsl(240, 100%, 50%), hsl(0, 100%, 50%));
     margin: 10px;
+    transition: transform 0.5s ease-in-out; /* Smooth transition */
 }
 
 #colorRangePoint {
@@ -486,6 +555,16 @@ input[type="date"] {
     border-radius: 50%;
     background: black;
     box-shadow: 2px 2px 5px 0px rgba(0, 0, 0, 1);
+}
+
+#colorRangeRange {
+    position: absolute;
+    bottom: 50px;
+    right: 22px;
+    margin: 0px;
+    padding: 15px;
+    color: white;
+    transition: transform 0.5s ease-in-out; /* Smooth transition */
 }
 
 #hoverInfo {
@@ -520,7 +599,7 @@ input[type="date"] {
 .input {
   padding: 1em;
   border-radius: 5px;
-    border: none;
+    border: white solid 1px;
   background-color: var(--primaryColor);
 }
 
@@ -573,15 +652,6 @@ input[type="number"] {
   visibility: visible;
 }
 
-#colorRangeRange {
-  position: absolute;
-  bottom: 50px;
-  right: 22px;
-  margin: 0px;
-  padding: 15px;
-  color: white;
-}
-
 .center {
   display: block;
   margin-left: auto;
@@ -589,65 +659,80 @@ input[type="number"] {
 }
 
 .Row {
-  display: table;
-  width: 100%; /*Optional*/
-  table-layout: fixed; /*Optional*/
-  border-spacing: 10px; /*Optional*/
+    display: flex;         /* Create a flex container */
+    gap: 10px;             /* Space between flex items */
+    width: 100%;
 }
+
 .Column {
-  display: table-cell;
-  color: white;
+    flex: 1;               /* Each column takes an equal share */
+    color: white;
+    background-color: #333; /* Added background for visibility */
+    padding: 10px;         /* Optional padding */
 }
 
-#aboutUs {
-  text-align: center;
+#progressOverlay {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(60, 63, 65, 0.9);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;  /* Ensure it sits above other content */
 }
 
-#aboutUs a {
-  text-decoration-line: none;
-  color: white;
+.progressContent {
+    text-align: center;
 }
 
-#aboutUs a:hover {
-  color: var(--toggleColor);
-  transition: .25s all ease;
-  text-decoration-line: none;
+#annualCounts {
+    display: flex;
 }
 
-#github {
-  text-align: center;
+/* Container settings: fill full width/height; add a min-height if desired */
+#forecastContainer {
+    width: 100%;
+    height: 100%;
+    min-height: 400px; /* Ensure a minimum height */
 }
-
-#github a {
-  text-decoration-line: none;
-  color: white;
+/* Calendar table fills the container */
+.calendar-table {
+    width: 100%;
+    height: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
 }
-
-#github a:hover {
-  color: var(--toggleColor);
-  transition: .25s all ease;
-  text-decoration-line: none;
+/* Header cells: white text on dark background */
+.calendar-table th {
+    background-color: #333;
+    color: white;
+    border: 1px solid #ccc;
+    vertical-align: middle;
+    text-align: center;
+    padding: 8px;
 }
-
-#showNumDataInput {
-  height: 20px;
+/* Regular cells use white text */
+.calendar-table td {
+    border: 1px solid #ccc;
+    vertical-align: middle;
+    text-align: center;
+    padding: 8px;
+    color: white;
 }
-
-#showNumDataButton {
-  text-align: center;
-  text-decoration: none;
-  display: inline-block;
-  padding: 5px;
-  font-size: 16px;
-  margin: 4px 2px;
-  cursor: pointer;
-  border: white solid 2px;
-  color: white;
-  background: var(--primaryColor);
+/* Empty cells: light background with black text */
+.empty-cell {
+    background-color: #949292;
+    color: black;
 }
-
-#showNumDataButton:hover {
-  color: var(--toggleColor);
-  transition: .25s all ease;
-  text-decoration-line: none;
+/* Date display styling */
+.date-cell {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+/* Forecast probability styling */
+.forecast-probability {
+    font-size: 0.9em;
 }
