@@ -233,9 +233,18 @@
         </div>
 
         <!-- ML Results (initially hidden until progress reaches 100) -->
-        <div class="Row" id="mlResults" style="display: none;">
-          <div class="Column" id="annualCounts">Annual Counts Placeholder</div>
+        <div class="Row" id="mlResults">
+          <!-- Top-left cell -->
           <div class="Column" id="forecastContainer">Probabilities Placeholder</div>
+
+          <!-- Top-right cell (blank) -->
+          <div class="Column" id="blankTopRight"></div>
+
+          <!-- Bottom-left cell -->
+          <div class="Column" id="annualCounts">Annual Counts Placeholder</div>
+
+          <!-- Bottom-right cell (blank) -->
+          <div class="Column" id="blankBottomRight"></div>
         </div>
       </div>
 

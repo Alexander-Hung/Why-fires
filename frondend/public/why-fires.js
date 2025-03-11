@@ -648,7 +648,7 @@ function startForecastStream(payload) {
         // Hide the progress overlay
         document.getElementById("progressOverlay").style.display = "none";
         // Reveal the results container
-        document.getElementById("mlResults").style.display = "flex";
+        document.getElementById("mlResults").style.display = "grid";
 
         // Display the forecast results using your existing functions
         displayAnnualCounts(data.annual_fire_counts);
