@@ -1,7 +1,6 @@
 /frondend/node_modules
-/frondend/public/data
-/backend/data
 /backend/.idea
 /frondend/.idea
 /.idea
 /backend/note
+/backend/data/modis
