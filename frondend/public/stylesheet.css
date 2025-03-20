@@ -193,6 +193,7 @@ select {
     background-image: none;
     cursor: pointer;
     font-size: var(--fontSize);
+    width: 20em;
 }
 
 .select {
@@ -201,6 +202,7 @@ select {
     height: 3em;
     border-radius: .25em;
     overflow: hidden;
+    width: 20em;
 }
 
 .select::after {
@@ -436,7 +438,7 @@ select {
   position: absolute;
   top: calc(var(--fontSize) * 0.125);
   left: 0;
-  background: var(--secondaryColor);  
+  background: var(--secondaryColor);
 }
 
 .checkbox-wrapper-29 .checkbox__label:after {
@@ -448,7 +450,7 @@ select {
   position: absolute;
   top: calc(var(--fontSize) * 0.125);
   left: 0;
-  background: var(--secondaryColor);  
+  background: var(--secondaryColor);
 }
 
 .checkbox-wrapper-29 .checkbox__label:after {
@@ -457,7 +459,7 @@ select {
 
 .checkbox-wrapper-29 .checkbox__input:checked ~ .checkbox__label:after {
   border: calc(var(--fontSize) * .14) solid white;
-  border-top-style: none; 
+  border-top-style: none;
   border-right-style: none;
   -ms-transform: rotate(-45deg); /* IE9 */
   transform: rotate(-45deg);
@@ -473,7 +475,7 @@ select {
 
 .checkbox-wrapper-29 .checkbox__label:after:hover,
 .checkbox-wrapper-29 .checkbox__label:after:active {
-    border-color: green; 
+    border-color: green;
 }
 
 .checkbox-wrapper-29 .checkbox__label {
@@ -502,6 +504,10 @@ input[type="date"] {
 
 ::-webkit-calendar-picker-indicator:hover {
     filter: invert(80%) sepia(39%) saturate(6499%) hue-rotate(356deg) brightness(103%) contrast(91%);
+}
+
+#countryFilter {
+    width: 20em;
 }
 
 #legendToggle  {
@@ -694,6 +700,7 @@ input[type="number"] {
 
 /* Container settings: fill full width/height; add a min-height if desired */
 #mlResults {
+    margin: 2em;
     display: grid;
     /* We have 2 columns and 2 rows. Adjust the row/column widths as desired. */
     grid-template-columns: 1fr 1fr;  /* e.g., two equal columns */

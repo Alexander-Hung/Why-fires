@@ -98,16 +98,15 @@ document.getElementById('countryFilter').addEventListener('change', loadData);
 /*               FETCHING COUNTRIES               */
 /**************************************************/
 function fetchCountries(year) {
+  const countrySelect = document.getElementById('countryFilter');
+  // Store the current selected country
+  const currentSelected = countrySelect.value;
+
   const url = `http://localhost:5000/api/countries?year=${year}`;
-
-  //console.log('Fetching countries from:', url);
-
   fetch(url)
       .then(response => response.json())
       .then(data => {
-        //console.log('Countries fetched:', data);
-
-        const countrySelect = document.getElementById('countryFilter');
+        // Clear the select element and add the default option
         countrySelect.innerHTML = '<option value="">Select Country</option>';
 
         if (data.countries && data.countries.length > 0) {
@@ -115,12 +114,17 @@ function fetchCountries(year) {
             const option = document.createElement('option');
             option.value = country;
             option.textContent = country;
+            // Re-select the option if it was previously selected
+            if (country === currentSelected) {
+              option.selected = true;
+            }
             countrySelect.appendChild(option);
           });
         }
       })
       .catch(error => console.error('Error fetching countries:', error));
 }
+
 
 /**************************************************/
 /*                  LOAD DATA                     */
@@ -825,32 +829,27 @@ document.getElementById("forecastButton").addEventListener("click", function() {
   }
 });
 
-/**************************************************/
-/*                     */
-/**************************************************/
-function checkProcessed() {
-  fetch('http://localhost:5000/api/check_processed')
-      .then(response => response.json())
-      .then(result => {
-        if (result.processed_ok) {
-          // Processed data exists; hide overlay.
-          document.getElementById("downloadOverlay").style.display = "none";
-        } else {
-          // Data missing; show overlay.
-          document.getElementById("downloadOverlay").style.display = "flex";
-        }
-      })
-      .catch(err => {
-        console.error("Error checking processed data:", err);
-        document.getElementById("downloadOverlay").style.display = "flex";
-      });
+
+// -----------------------------
+// Check Data Availability
+// -----------------------------
+function checkData() {
+  // Check localStorage flag to decide whether to show the overlay.
+  const dataDownloaded = localStorage.getItem("dataDownloaded");
+  if (dataDownloaded === "true") {
+    document.getElementById("downloadOverlay").style.display = "none";
+  } else {
+    document.getElementById("downloadOverlay").style.display = "flex";
+  }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  checkProcessed();
+  checkData();
 });
 
-// Function to start the download process via /api/download_data
+// -----------------------------
+// Download Data via /api/download_data
+// -----------------------------
 function startDownload() {
   const progressElem = document.getElementById("firstProgressBar");
   const textElem = document.getElementById("progressText");
@@ -861,7 +860,7 @@ function startDownload() {
   const eventSource = new EventSource(url);
 
   eventSource.onmessage = function(event) {
-    console.log("Received SSE for download:", event.data);
+    console.log("Download SSE:", event.data);
     try {
       const data = JSON.parse(event.data);
       if (data.progress !== null) {
@@ -871,24 +870,26 @@ function startDownload() {
       if (data.phase) {
         messageElem.textContent = data.phase + ": " + data.message;
       }
-      if ((data.phase === "download skip" && data.progress === 100) || data.phase === "download complete") {
-        // Download phase complete; now trigger conversion.
+      // When download completes or is skipped, trigger conversion.
+      if ((data.phase === "download complete" || data.phase === "download skip") && data.progress === 100) {
         eventSource.close();
         startConversion();
       }
     } catch (err) {
-      console.error("Error parsing SSE message:", err);
+      console.error("Error parsing download SSE:", err);
     }
   };
 
   eventSource.onerror = function(error) {
-    console.error("SSE error (download):", error);
+    console.error("Download SSE error:", error);
     eventSource.close();
     alert("An error occurred during download.");
   };
 }
 
-// Function to start the conversion process via /api/convert_data
+// -----------------------------
+// Convert Data via /api/convert_data
+// -----------------------------
 function startConversion() {
   const progressElem = document.getElementById("firstProgressBar");
   const textElem = document.getElementById("progressText");
@@ -899,7 +900,7 @@ function startConversion() {
   const eventSource = new EventSource(url);
 
   eventSource.onmessage = function(event) {
-    console.log("Received SSE for conversion:", event.data);
+    console.log("Conversion SSE:", event.data);
     try {
       const data = JSON.parse(event.data);
       if (data.progress !== null) {
@@ -909,25 +910,35 @@ function startConversion() {
       if (data.phase) {
         messageElem.textContent = data.phase + ": " + data.message;
       }
-      if ((data.phase === "complete" && data.progress === 100) || data.phase === "done") {
+      // When conversion completes, trigger processing.
+      if ((data.phase === "complete" || data.phase === "done") && data.progress === 100) {
+        eventSource.close();
         setTimeout(() => {
           document.getElementById("downloadOverlay").style.display = "none";
         }, 500);
-        eventSource.close();
+        // Set flag so that next time we don't run the chain.
+        localStorage.setItem("dataDownloaded", "true");
       }
     } catch (err) {
-      console.error("Error parsing SSE message:", err);
+      console.error("Error parsing conversion SSE:", err);
     }
   };
 
   eventSource.onerror = function(error) {
-    console.error("SSE error (conversion):", error);
+    console.error("Conversion SSE error:", error);
     eventSource.close();
     alert("An error occurred during conversion.");
   };
 }
 
-// When the user clicks "Start Download", first run the download endpoint.
+// -----------------------------
+// Start chain when user clicks the download button.
+// -----------------------------
 document.getElementById("startDownloadBtn").addEventListener("click", function() {
+  // Reset progress display
+  document.getElementById("firstProgressBar").value = 0;
+  document.getElementById("progressText").textContent = "0%";
+  document.getElementById("downloadMessage").textContent = "Starting download...";
+  // Start the chain: download -> conversion.
   startDownload();
 });

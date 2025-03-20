@@ -12,12 +12,15 @@ from flask import Flask, render_template, request, jsonify, Response
 from flask_cors import CORS, cross_origin
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from tqdm.auto import tqdm
-
+from dotenv import load_dotenv
+load_dotenv()
 
 
 app = Flask(__name__, template_folder='public')
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
+CPU_THRESHOLD = float(os.getenv("CPU_THRESHOLD", "25"))
+MEMORY_THRESHOLD_GB = float(os.getenv("MEMORY_THRESHOLD_GB", "8"))
 # -------------------------------
 # R2 / S3 Configuration (for download endpoint)
 # -------------------------------
@@ -36,7 +39,6 @@ s3 = boto3.client(
     aws_secret_access_key=CLIENT_SECRET
 )
 
-
 # -------------------------------
 # Conversion generator (using your note code)
 # -------------------------------
@@ -52,7 +54,7 @@ def convert_parquet_to_csv_stream(parquet_file_path, output_base):
 
     for rg in range(num_row_groups):
         cpu_usage = psutil.cpu_percent(interval=0.1)
-        if cpu_usage > 25:
+        if cpu_usage > CPU_THRESHOLD:
             yield f"data: {json.dumps({'progress': None, 'phase': 'throttling', 'message': f'High CPU usage: {cpu_usage}%, sleeping 0.5 sec'})}\n\n"
             time.sleep(0.5)
         table = pf.read_row_group(rg)
@@ -69,33 +71,42 @@ def convert_parquet_to_csv_stream(parquet_file_path, output_base):
         progress = int((rg + 1) / num_row_groups * 100)
         yield f"data: {json.dumps({'progress': progress, 'phase': 'converting', 'message': f'Processed row group {rg + 1} of {num_row_groups}'})}\n\n"
         mem_usage_gb = psutil.virtual_memory().used / (1024 ** 3)
-        if mem_usage_gb > 8:
+        if mem_usage_gb > MEMORY_THRESHOLD_GB:
             yield f"data: {json.dumps({'progress': progress, 'phase': 'throttling', 'message': f'High memory usage: {mem_usage_gb:.2f}GB, sleeping 1 sec'})}\n\n"
             time.sleep(1)
     yield f"data: {json.dumps({'progress': 100, 'phase': 'done', 'message': 'Conversion complete'})}\n\n"
 
 # -------------------------------
-# API endpoint: Check Processed Data
+# Endpoint: Check Data
 # -------------------------------
-@app.route('/api/check_processed', methods=['GET'])
+@app.route('/api/check_data', methods=['GET'])
 @cross_origin(origins='http://localhost:3000')
-def check_processed():
+def check_data():
     """
-    Checks if the processed data folder (./data/processed) exists and contains CSV files.
-    Returns {"processed_ok": true} if CSV data is available; otherwise, false.
+    Checks if:
+      - combined.parquet exists,
+      - the CSV folder (data/modis) exists and contains files
+    Returns a JSON object with the status of each.
     """
-    processed_dir = os.path.join('data', 'processed')
-    if os.path.isdir(processed_dir):
+    combined_exists = os.path.exists(LOCAL_PARQUET)
+
+    modis_dir = os.path.join('data', 'modis')
+    modis_exists = False
+
+    if os.path.isdir(modis_dir):
         csv_files = []
-        for root, dirs, files in os.walk(processed_dir):
+        for root, dirs, files in os.walk(modis_dir):
             csv_files.extend([f for f in files if f.endswith('.csv')])
-        if csv_files:
-            return jsonify({"processed_ok": True})
-    return jsonify({"processed_ok": False})
+        modis_exists = bool(csv_files)
+
+    return jsonify({
+        "combined_exists": combined_exists,
+        "modis_exists": modis_exists
+    })
 
 
 # -------------------------------
-# API endpoint: Download Data from R2
+# Endpoint: Download Data from R2
 # -------------------------------
 @app.route('/api/download_data', methods=['GET'])
 @cross_origin(origins='http://localhost:3000')
@@ -104,7 +115,7 @@ def download_data():
     Downloads the combined.parquet file from R2 if not already present.
     Streams progress updates as SSE messages.
     Query parameters:
-      - drive_url: URL to download the Parquet file (default uses R2 settings)
+      - drive_url: URL to download the file (default constructed from R2 settings)
       - parquet_file: Local filename (default: combined.parquet)
     """
     drive_url = request.args.get('drive_url', f"{CONNECTION_URL}/{BUCKET_NAME}/{FILE_KEY}")
@@ -130,7 +141,7 @@ def download_data():
                     self._progress["transferred"] += bytes_amount
 
             callback = ProgressPercentage(progress_obj)
-            import threading
+
             def download():
                 try:
                     s3.download_file(BUCKET_NAME, FILE_KEY, parquet_file, Callback=callback)
@@ -154,35 +165,29 @@ def download_data():
 
     return Response(generate(), mimetype='text/event-stream')
 
+
 # -------------------------------
-# API endpoint: Convert Data (Parquet -> CSV)
+# Endpoint: Convert Data (Parquet -> CSV in data/modis)
 # -------------------------------
 @app.route('/api/convert_data', methods=['GET'])
 @cross_origin(origins='http://localhost:3000')
 def convert_data():
     """
-    Converts the combined.parquet file into CSV files (using convert_parquet_to_csv_stream)
-    if the processed folder (./data/processed) is missing or empty.
+    Converts the combined.parquet file into CSV files in the data/modis folder.
+    Streams progress updates as SSE messages.
     Query parameters:
       - parquet_file: Local filename (default: combined.parquet)
-      - output_dir: Directory for CSV output (default: data/processed)
-    Streams progress updates as SSE messages.
+      - output_dir: CSV output folder (default: data/modis)
     """
     parquet_file = request.args.get('parquet_file', LOCAL_PARQUET)
-    output_dir = request.args.get('output_dir', os.path.join('data', 'processed'))
+    output_dir = request.args.get('output_dir', os.path.join('data', 'modis'))
 
     def generate():
-        # If processed data exists, no conversion is needed.
-        if os.path.isdir(output_dir):
-            csv_files = []
-            for root, dirs, files in os.walk(output_dir):
-                csv_files.extend([f for f in files if f.endswith('.csv')])
-            if csv_files:
-                yield f"data: {json.dumps({'progress': 100, 'phase': 'complete', 'message': 'Processed data already exists. No conversion needed.'})}\n\n"
-                return
-
-        # Otherwise, run conversion.
-        yield f"data: {json.dumps({'progress': 0, 'phase': 'conversion', 'message': 'Starting conversion to CSV'})}\n\n"
+        # If data/modis exists and is non-empty, no conversion needed.
+        if os.path.isdir(output_dir) and os.listdir(output_dir):
+            yield f"data: {json.dumps({'progress': 100, 'phase': 'complete', 'message': 'data/modis already exists. No conversion needed.'})}\n\n"
+            return
+        yield f"data: {json.dumps({'progress': 0, 'phase': 'conversion', 'message': 'Starting conversion to CSV in data/modis'})}\n\n"
         yield from convert_parquet_to_csv_stream(parquet_file, output_dir)
 
     return Response(generate(), mimetype='text/event-stream')
@@ -208,7 +213,7 @@ def forecast_fire_occurrence_stream(country_name, base_dir, map_key, country_abb
 
     # Phase 1: Load historical data
     for year in tqdm(years, desc="Loading data"):
-        file_name = f"modis_{year}_{country_name.replace(' ', '_')}.csv"
+        file_name = f"{country_name.replace(' ', '_')}.csv"
         file_path = os.path.join(base_dir, str(year), file_name)
         if os.path.exists(file_path):
             df_year = pd.read_csv(file_path)
@@ -348,7 +353,7 @@ def get_data():
     year = request.args.get('year')
     country = request.args.get('country')
     country = country.replace('_', ' ')
-    file_path = f'./data/processed/{year}/{country}.csv'
+    file_path = f'./data/modis/{year}/{country}.csv'
 
     if not os.path.isfile(file_path):
         return jsonify({'error': 'Data not found'}), 404
@@ -384,12 +389,12 @@ def get_detail():
 @cross_origin(origins='http://localhost:3000')
 def get_countries():
     year = request.args.get('year')
-    folder_path = f'./data/processed/{year}/'
+    folder_path = f'./data/modis/{year}/'
 
     if not os.path.exists(folder_path):
         return jsonify({'error': 'Year not found'}), 404
 
-    # Get all CSV files in data/processed/{year}
+    # Get all CSV files in data/modis/{year}
     csv_files = glob.glob(os.path.join(folder_path, '*.csv'))
 
     # Use the filename (without the .csv extension) as the country name
@@ -427,5 +432,4 @@ def index():
 
 if __name__ == '__main__':
     os.makedirs(os.path.join('data', 'modis'), exist_ok=True)
-    os.makedirs(os.path.join('data', 'processed'), exist_ok=True)
     app.run(debug=True)

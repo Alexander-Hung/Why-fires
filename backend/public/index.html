@@ -21,7 +21,14 @@
   </style>
 </head>
 <body>
-  <h1>MODIS Data Viewer API Test</h1>
+    <h1>MODIS Data Viewer API Test</h1>
+
+  <!-- Section: Check Data -->
+  <section>
+    <h2>Check Data Availability</h2>
+    <button id="checkDataBtn">Check Data</button>
+    <pre id="checkDataOutput"></pre>
+  </section>
 
   <!-- Section: Test Download Data API -->
   <section>
@@ -35,7 +42,7 @@
 
   <!-- Section: Test Convert Data API -->
   <section>
-    <h2>Test Convert Data API</h2>
+    <h2>Test Convert Data API (Parquet -> data/modis)</h2>
     <button id="testConvertBtn">Test Convert Data</button>
     <div>
       <progress id="convertProgress" value="0" max="100"></progress>
@@ -110,6 +117,19 @@
   </section>
 
   <script>
+    // Check Data API: returns status for combined.parquet, data/modis, and data/processed.
+    document.getElementById("checkDataBtn").addEventListener("click", function() {
+      fetch("/api/check_data")
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById("checkDataOutput").textContent = JSON.stringify(data, null, 2);
+        })
+        .catch(error => {
+          console.error("Error checking data:", error);
+          document.getElementById("checkDataOutput").textContent = "Error checking data.";
+        });
+    });
+
     // Test Download Data API
     function testDownloadData() {
       const progressElem = document.getElementById("downloadProgress");
@@ -140,6 +160,8 @@
         eventSource.close();
       };
     }
+
+    document.getElementById("testDownloadBtn").addEventListener("click", testDownloadData);
 
     // Test Convert Data API
     function testConvertData() {
@@ -172,7 +194,6 @@
       };
     }
 
-    document.getElementById("testDownloadBtn").addEventListener("click", testDownloadData);
     document.getElementById("testConvertBtn").addEventListener("click", testConvertData);
 
     // -----------------------------

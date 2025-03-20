@@ -6,3 +6,4 @@
 /backend/data/modis
 /backend/data/processed
 .env
+backend/combined.parquet
