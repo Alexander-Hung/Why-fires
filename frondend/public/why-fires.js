@@ -834,18 +834,41 @@ document.getElementById("forecastButton").addEventListener("click", function() {
 // Check Data Availability
 // -----------------------------
 function checkData() {
-  // Check localStorage flag to decide whether to show the overlay.
-  const dataDownloaded = localStorage.getItem("dataDownloaded");
-  if (dataDownloaded === "true") {
-    document.getElementById("downloadOverlay").style.display = "none";
-  } else {
-    document.getElementById("downloadOverlay").style.display = "flex";
-  }
+  // First, check the data setup flag.
+  fetch('http://localhost:5000/api/data_setup')
+      .then(response => response.json())
+      .then(result => {
+        if (result.data_setup === true) {
+          // The DATA_SETUP flag is true, so we assume data is already set up.
+          document.getElementById("downloadOverlay").style.display = "none";
+        } else {
+          // DATA_SETUP is false, so run the regular check.
+          fetch('http://localhost:5000/api/check_data')
+              .then(response => response.json())
+              .then(result => {
+                // If modis data exists, no need to show overlay.
+                if (result.modis_exists) {
+                  document.getElementById("downloadOverlay").style.display = "none";
+                } else {
+                  document.getElementById("downloadOverlay").style.display = "flex";
+                }
+              })
+              .catch(err => {
+                console.error("Error checking data:", err);
+                document.getElementById("downloadOverlay").style.display = "flex";
+              });
+        }
+      })
+      .catch(err => {
+        console.error("Error checking data setup:", err);
+        document.getElementById("downloadOverlay").style.display = "flex";
+      });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
   checkData();
 });
+
 
 // -----------------------------
 // Download Data via /api/download_data
@@ -910,14 +933,25 @@ function startConversion() {
       if (data.phase) {
         messageElem.textContent = data.phase + ": " + data.message;
       }
-      // When conversion completes, trigger processing.
+      // When conversion completes, send a flag to the backend and then hide overlay.
       if ((data.phase === "complete" || data.phase === "done") && data.progress === 100) {
-        eventSource.close();
+        // Send a POST request to set the DATA_SETUP flag to true.
+        fetch("http://localhost:5000/api/set_data_setup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data_setup: true })
+        })
+            .then(response => response.json())
+            .then(result => {
+              console.log("DATA_SETUP updated:", result);
+            })
+            .catch(err => {
+              console.error("Error updating DATA_SETUP:", err);
+            });
         setTimeout(() => {
           document.getElementById("downloadOverlay").style.display = "none";
         }, 500);
-        // Set flag so that next time we don't run the chain.
-        localStorage.setItem("dataDownloaded", "true");
+        eventSource.close();
       }
     } catch (err) {
       console.error("Error parsing conversion SSE:", err);

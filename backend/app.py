@@ -21,6 +21,7 @@ CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
 CPU_THRESHOLD = float(os.getenv("CPU_THRESHOLD", "25"))
 MEMORY_THRESHOLD_GB = float(os.getenv("MEMORY_THRESHOLD_GB", "8"))
+
 # -------------------------------
 # R2 / S3 Configuration (for download endpoint)
 # -------------------------------
@@ -104,6 +105,39 @@ def check_data():
         "modis_exists": modis_exists
     })
 
+@app.route('/api/data_setup', methods=['GET'])
+@cross_origin(origins='http://localhost:3000')
+def data_setup():
+    """
+    Reads a file called DATA_SETUP (expected to contain "True" or "False").
+    Returns {"data_setup": true} if its content is "True" (case-insensitive); otherwise, false.
+    If the file is missing, we assume it's not been set up (False).
+    """
+    try:
+        with open("DATA_SETUP", "r") as f:
+            content = f.read().strip().lower()
+            if content == "true":
+                return jsonify({"data_setup": True})
+            else:
+                return jsonify({"data_setup": False})
+    except Exception as e:
+        # If the file does not exist or cannot be read, assume not set up.
+        return jsonify({"data_setup": False})
+
+@app.route('/api/set_data_setup', methods=['POST'])
+@cross_origin(origins='http://localhost:3000')
+def set_data_setup():
+    """
+    Receives a JSON payload like {"data_setup": true} and writes "True" or "False" to the DATA_SETUP file.
+    """
+    try:
+        data = request.get_json()
+        flag = data.get("data_setup", False)
+        with open("DATA_SETUP", "w") as f:
+            f.write("True" if flag else "False")
+        return jsonify({"success": True, "data_setup": flag})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # -------------------------------
 # Endpoint: Download Data from R2
