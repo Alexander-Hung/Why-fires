@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Why Fires</title>
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/d3-dsv"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js" charset="utf-8"></script>
-  <script src="//unpkg.com/d3"></script>
-  <script src="//unpkg.com/d3-dsv"></script>
-  <script src="//unpkg.com/globe.gl"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/d3"></script>
   <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
   <link href="stylesheet.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -49,7 +49,7 @@
             <div id="filter">
               <div class="select">
                 <select id="countryFilter">
-                  <option value="">Select Country</option>
+                  <option value="" >Select Country</option>
                 </select>
               </div>
             </div>
@@ -270,6 +270,22 @@
 <footer>
 
 </footer>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Check if a map key is already stored, and if so, prefill the input.
+    const storedMapKey = localStorage.getItem("map_key");
+    if (storedMapKey) {
+      document.getElementById("mapKeyInput").value = storedMapKey;
+    }
+
+    // Attach an event listener to save the map key whenever the user changes it.
+    document.getElementById("mapKeyInput").addEventListener("blur", function() {
+      const mapKey = this.value;
+      localStorage.setItem("map_key", mapKey);
+    });
+  });
+
+</script>
 <script src="why-fires.js"></script>
 </body>
 </html>
