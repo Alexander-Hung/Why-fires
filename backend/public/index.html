@@ -1,140 +1,231 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>MODIS Data Viewer</title>
+  <meta charset="UTF-8">
+  <title>MODIS Data Viewer</title>
+  <style>
+        body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    section {
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    progress {
+      width: 300px;
+      height: 20px;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
-    <h1>MODIS Data Viewer</h1>
+  <h1>MODIS Data Viewer API Test</h1>
 
-        <!-- Form to Fetch Available Countries for a Given Year -->
+  <!-- Section: Test Download Data API -->
+  <section>
+    <h2>Test Download Data API</h2>
+    <button id="testDownloadBtn">Test Download Data</button>
+    <div>
+      <progress id="downloadProgress" value="0" max="100"></progress>
+      <p id="downloadMessage">Download status:</p>
+    </div>
+  </section>
+
+  <!-- Section: Test Convert Data API -->
+  <section>
+    <h2>Test Convert Data API</h2>
+    <button id="testConvertBtn">Test Convert Data</button>
+    <div>
+      <progress id="convertProgress" value="0" max="100"></progress>
+      <p id="convertMessage">Conversion status:</p>
+    </div>
+  </section>
+
+  <!-- (Other sections: Fetch Countries, Fetch Data, Forecast, etc.) -->
+  <section>
+    <h2>Fetch Available Countries for Year</h2>
     <form onsubmit="fetchCountries(); return false;">
-        <h2>Fetch Available Countries for Year</h2>
-        <input type="text" id="countriesYearInput" placeholder="Year" required>
-        <button type="submit">Get Countries</button>
+      <input type="text" id="countriesYearInput" placeholder="Year" required>
+      <button type="submit">Get Countries</button>
     </form>
     <div id="countriesResults">
-        <h2>Available Countries</h2>
-        <pre id="countriesContainer"></pre>
+      <h3>Available Countries</h3>
+      <pre id="countriesContainer"></pre>
     </div>
+  </section>
 
-    <!-- Form to Fetch Entire CSV for Year and Country -->
+  <section>
+    <h2>Fetch Data by Year and Country</h2>
     <form onsubmit="fetchYearCountryData(); return false;">
-        <h2>Fetch Data by Year and Country</h2>
-        <input type="text" id="yearInputData" placeholder="Year" required>
-        <input type="text" id="countryInputData" placeholder="Country" required>
-        <button type="submit">Fetch Data</button>
+      <input type="text" id="yearInputData" placeholder="Year" required>
+      <input type="text" id="countryInputData" placeholder="Country" required>
+      <button type="submit">Fetch Data</button>
     </form>
     <div id="dataResults">
-        <h2>Year and Country Data</h2>
-        <pre id="dataContainer"></pre>
+      <h3>Year and Country Data</h3>
+      <pre id="dataContainer"></pre>
     </div>
+  </section>
 
-    <!-- Form to Fetch Specific Data Point -->
+  <section>
+    <h2>Fetch Specific Data Point</h2>
     <form onsubmit="fetchDataDetail(); return false;">
-        <h2>Fetch Specific Data Point</h2>
-        <input type="text" id="yearInput" placeholder="Year" required>
-        <input type="text" id="countryInput" placeholder="Country" required>
-        <input type="text" id="latitudeInput" placeholder="Latitude" required>
-        <input type="text" id="longitudeInput" placeholder="Longitude" required>
-        <input type="text" id="acqDateInput" placeholder="Acquisition Date (YYYY-MM-DD)" required>
-        <input type="text" id="acqTimeInput" placeholder="Acquisition Time" required>
-        <button type="submit">Fetch Details</button>
+      <input type="text" id="yearInput" placeholder="Year" required>
+      <input type="text" id="countryInput" placeholder="Country" required>
+      <input type="text" id="latitudeInput" placeholder="Latitude" required>
+      <input type="text" id="longitudeInput" placeholder="Longitude" required>
+      <input type="text" id="acqDateInput" placeholder="Acquisition Date (YYYY-MM-DD)" required>
+      <input type="text" id="acqTimeInput" placeholder="Acquisition Time" required>
+      <button type="submit">Fetch Details</button>
     </form>
     <div id="dataDetails">
-        <h2>Data Point Details</h2>
-        <pre id="detailsContainer"></pre>
+      <h3>Data Point Details</h3>
+      <pre id="detailsContainer"></pre>
     </div>
+  </section>
 
-
-    <div class="container">
-    <h1>Forecast Test UI</h1>
-
+  <section>
+    <h2>Forecast Test UI</h2>
     <label for="countryFilter">Country Name:</label>
-    <input type="text" id="countryFilter" placeholder="Enter country name (e.g., Australia)" />
-
+    <input type="text" id="countryFilter" placeholder="Enter country name" /><br>
     <label for="mapKeyInput">Map Key:</label>
-    <input type="text" id="mapKeyInput" placeholder="Enter Map Key" />
-
+    <input type="text" id="mapKeyInput" placeholder="Enter Map Key" /><br>
     <label for="daysInput">Days:</label>
-    <input type="number" id="daysInput" placeholder="Enter number of days" />
-
+    <input type="number" id="daysInput" placeholder="Enter number of days" /><br>
     <label for="periodsInput">Periods:</label>
-    <input type="number" id="periodsInput" placeholder="Enter forecast periods" />
-
+    <input type="number" id="periodsInput" placeholder="Enter forecast periods" /><br>
     <label for="startDateInput">Start Date:</label>
-    <input type="date" id="startDateInput" />
-
+    <input type="date" id="startDateInput" /><br>
     <button id="forecastButton">Start Forecast</button>
-
-    <h2>Progress</h2>
+    <h3>Progress</h3>
     <progress id="progressBar" max="100" value="0"></progress>
-
     <div id="results">
-      <h2>Annual Fire Counts</h2>
+      <h3>Annual Fire Counts</h3>
       <div id="annualCounts"></div>
-      <h2>Forecast Probabilities</h2>
+      <h3>Forecast Probabilities</h3>
       <div id="forecastContainer"></div>
     </div>
-  </div>
+  </section>
 
-    <script>
-        // Function to fetch entire CSV data for year and country
-        function fetchYearCountryData() {
-            const year = document.getElementById('yearInputData').value;
-            const country = document.getElementById('countryInputData').value;
+  <script>
+    // Test Download Data API
+    function testDownloadData() {
+      const progressElem = document.getElementById("downloadProgress");
+      const messageElem = document.getElementById("downloadMessage");
+      const url = '/api/download_data';
+      console.log("Testing download API via:", url);
+      const eventSource = new EventSource(url);
 
-            fetch(`/api/data?year=${year}&country=${country}`)
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('dataContainer').textContent = JSON.stringify(data, null, 2);
-                })
-                .catch(error => console.error('Error:', error));
+      eventSource.onmessage = function(event) {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.progress !== null) {
+            progressElem.value = data.progress;
+          }
+          if (data.phase) {
+            messageElem.textContent = "Download " + data.phase + ": " + data.message;
+          }
+          if ((data.phase === "download complete" || data.phase === "download skip") && data.progress === 100) {
+            eventSource.close();
+          }
+        } catch(err) {
+          console.error("Error parsing SSE message:", err);
         }
+      };
 
-        // Function to fetch specific data point details
-        function fetchDataDetail() {
-            const data = {
-                year: document.getElementById('yearInput').value,
-                country: document.getElementById('countryInput').value,
-                latitude: document.getElementById('latitudeInput').value,
-                longitude: document.getElementById('longitudeInput').value,
-                acq_date: document.getElementById('acqDateInput').value,
-                acq_time: document.getElementById('acqTimeInput').value,
-            };
+      eventSource.onerror = function(error) {
+        console.error("SSE error (download):", error);
+        eventSource.close();
+      };
+    }
 
-            fetch('/api/detail', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            })
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('detailsContainer').textContent = JSON.stringify(data, null, 2);
-                })
-                .catch(error => console.error('Error:', error));
+    // Test Convert Data API
+    function testConvertData() {
+      const progressElem = document.getElementById("convertProgress");
+      const messageElem = document.getElementById("convertMessage");
+      const url = '/api/convert_data';
+      console.log("Testing convert API via:", url);
+      const eventSource = new EventSource(url);
+
+      eventSource.onmessage = function(event) {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.progress !== null) {
+            progressElem.value = data.progress;
+          }
+          if (data.phase) {
+            messageElem.textContent = "Conversion " + data.phase + ": " + data.message;
+          }
+          if ((data.phase === "complete" || data.phase === "done") && data.progress === 100) {
+            eventSource.close();
+          }
+        } catch(err) {
+          console.error("Error parsing SSE message:", err);
         }
+      };
 
-        // Function to fetch available countries for a given year
-        function fetchCountries() {
-            const year = document.getElementById('countriesYearInput').value;
+      eventSource.onerror = function(error) {
+        console.error("SSE error (conversion):", error);
+        eventSource.close();
+      };
+    }
 
-            fetch(`/api/countries?year=${year}`)
-                .then(response => response.json())
-                .then(countries => {
-                    document.getElementById('countriesContainer').textContent = JSON.stringify(countries, null, 2);
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    document.getElementById('countriesContainer').textContent = 'No data available for this year.';
-                });
-        }
+    document.getElementById("testDownloadBtn").addEventListener("click", testDownloadData);
+    document.getElementById("testConvertBtn").addEventListener("click", testConvertData);
 
+    // -----------------------------
+    // Other Test Functions (fetchCountries, fetchData, forecast, etc.)
+    // -----------------------------
+    function fetchCountries() {
+      const year = document.getElementById('countriesYearInput').value;
+      fetch(`/api/countries?year=${year}`)
+          .then(response => response.json())
+          .then(countries => {
+            document.getElementById('countriesContainer').textContent = JSON.stringify(countries, null, 2);
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('countriesContainer').textContent = 'No data available for this year.';
+          });
+    }
 
-        // Opens an SSE connection to the backend forecast_stream endpoint,
-    // passing parameters as query string.
+    function fetchYearCountryData() {
+      const year = document.getElementById('yearInputData').value;
+      const country = document.getElementById('countryInputData').value;
+      fetch(`/api/data?year=${year}&country=${country}`)
+          .then(response => response.json())
+          .then(data => {
+            document.getElementById('dataContainer').textContent = JSON.stringify(data, null, 2);
+          })
+          .catch(error => console.error('Error:', error));
+    }
+
+    function fetchDataDetail() {
+      const data = {
+        year: document.getElementById('yearInput').value,
+        country: document.getElementById('countryInput').value,
+        latitude: document.getElementById('latitudeInput').value,
+        longitude: document.getElementById('longitudeInput').value,
+        acq_date: document.getElementById('acqDateInput').value,
+        acq_time: document.getElementById('acqTimeInput').value,
+      };
+
+      fetch('/api/detail', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      })
+          .then(response => response.json())
+          .then(data => {
+            document.getElementById('detailsContainer').textContent = JSON.stringify(data, null, 2);
+          })
+          .catch(error => console.error('Error:', error));
+    }
+
     function startForecastStream(payload) {
       const urlParams = new URLSearchParams(payload);
       const url = `http://localhost:5000/api/forecast_stream?${urlParams.toString()}`;
@@ -146,11 +237,9 @@
         console.log("Received SSE message:", event.data);
         try {
           const data = JSON.parse(event.data);
-          // Update progress bar if a progress value is sent.
           if (data.progress !== undefined) {
             document.getElementById("progressBar").value = data.progress;
           }
-          // When final results are received, display them and close the connection.
           if (data.progress === 100 && data.annual_fire_counts && data.probabilities) {
             displayForecastResults(data);
             eventSource.close();
@@ -166,7 +255,6 @@
       };
     }
 
-    // Displays the forecast results in the UI.
     function displayForecastResults(result) {
       const annualCountsContainer = document.getElementById("annualCounts");
       annualCountsContainer.innerHTML = "";
@@ -185,26 +273,21 @@
       });
     }
 
-    // Handle the forecast button click.
     document.getElementById("forecastButton").addEventListener("click", function() {
-      // Get values from input fields.
       const country_name = document.getElementById("countryFilter").value;
       const map_key = document.getElementById("mapKeyInput").value;
       const days = document.getElementById("daysInput").value;
       const periods = document.getElementById("periodsInput").value;
       const start_date = document.getElementById("startDateInput").value;
 
-      // Build the payload.
       const payload = { country_name, map_key, days, start_date, periods };
 
-      // Reset UI elements.
       document.getElementById("progressBar").value = 0;
       document.getElementById("annualCounts").innerHTML = "";
       document.getElementById("forecastContainer").innerHTML = "";
 
-      // Start streaming forecast updates.
       startForecastStream(payload);
     });
-    </script>
+  </script>
 </body>
 </html>

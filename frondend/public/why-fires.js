@@ -826,3 +826,108 @@ document.getElementById("forecastButton").addEventListener("click", function() {
 });
 
 /**************************************************/
+/*                     */
+/**************************************************/
+function checkProcessed() {
+  fetch('http://localhost:5000/api/check_processed')
+      .then(response => response.json())
+      .then(result => {
+        if (result.processed_ok) {
+          // Processed data exists; hide overlay.
+          document.getElementById("downloadOverlay").style.display = "none";
+        } else {
+          // Data missing; show overlay.
+          document.getElementById("downloadOverlay").style.display = "flex";
+        }
+      })
+      .catch(err => {
+        console.error("Error checking processed data:", err);
+        document.getElementById("downloadOverlay").style.display = "flex";
+      });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  checkProcessed();
+});
+
+// Function to start the download process via /api/download_data
+function startDownload() {
+  const progressElem = document.getElementById("firstProgressBar");
+  const textElem = document.getElementById("progressText");
+  const messageElem = document.getElementById("downloadMessage");
+
+  const url = 'http://localhost:5000/api/download_data';
+  console.log("Starting download via:", url);
+  const eventSource = new EventSource(url);
+
+  eventSource.onmessage = function(event) {
+    console.log("Received SSE for download:", event.data);
+    try {
+      const data = JSON.parse(event.data);
+      if (data.progress !== null) {
+        progressElem.value = data.progress;
+        textElem.textContent = data.progress + "%";
+      }
+      if (data.phase) {
+        messageElem.textContent = data.phase + ": " + data.message;
+      }
+      if ((data.phase === "download skip" && data.progress === 100) || data.phase === "download complete") {
+        // Download phase complete; now trigger conversion.
+        eventSource.close();
+        startConversion();
+      }
+    } catch (err) {
+      console.error("Error parsing SSE message:", err);
+    }
+  };
+
+  eventSource.onerror = function(error) {
+    console.error("SSE error (download):", error);
+    eventSource.close();
+    alert("An error occurred during download.");
+  };
+}
+
+// Function to start the conversion process via /api/convert_data
+function startConversion() {
+  const progressElem = document.getElementById("firstProgressBar");
+  const textElem = document.getElementById("progressText");
+  const messageElem = document.getElementById("downloadMessage");
+
+  const url = 'http://localhost:5000/api/convert_data';
+  console.log("Starting conversion via:", url);
+  const eventSource = new EventSource(url);
+
+  eventSource.onmessage = function(event) {
+    console.log("Received SSE for conversion:", event.data);
+    try {
+      const data = JSON.parse(event.data);
+      if (data.progress !== null) {
+        progressElem.value = data.progress;
+        textElem.textContent = data.progress + "%";
+      }
+      if (data.phase) {
+        messageElem.textContent = data.phase + ": " + data.message;
+      }
+      if ((data.phase === "complete" && data.progress === 100) || data.phase === "done") {
+        setTimeout(() => {
+          document.getElementById("downloadOverlay").style.display = "none";
+        }, 500);
+        eventSource.close();
+      }
+    } catch (err) {
+      console.error("Error parsing SSE message:", err);
+    }
+  };
+
+  eventSource.onerror = function(error) {
+    console.error("SSE error (conversion):", error);
+    eventSource.close();
+    alert("An error occurred during conversion.");
+  };
+}
+
+// When the user clicks "Start Download", first run the download endpoint.
+document.getElementById("startDownloadBtn").addEventListener("click", function() {
+  startDownload();
+});
