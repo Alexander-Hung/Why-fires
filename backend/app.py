@@ -165,11 +165,11 @@ def convert_data():
     if the processed folder (./data/processed) is missing or empty.
     Query parameters:
       - parquet_file: Local filename (default: combined.parquet)
-      - output_dir: Directory for CSV output (default: data/processed)
+      - output_dir: Directory for CSV output (default: data/modis)
     Streams progress updates as SSE messages.
     """
     parquet_file = request.args.get('parquet_file', LOCAL_PARQUET)
-    output_dir = request.args.get('output_dir', os.path.join('data', 'processed'))
+    output_dir = request.args.get('output_dir', os.path.join('data', 'modis'))
 
     def generate():
         # If processed data exists, no conversion is needed.
