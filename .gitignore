@@ -4,5 +4,5 @@
 /.idea
 /backend/note
 /backend/data/modis
-/backend/data
+/backend/data/processed
 .env
