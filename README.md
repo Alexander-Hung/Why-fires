@@ -75,6 +75,7 @@ OR
 ---
 
 ## Configuration
+In backend folder:
 
 1. Copy the example `.env` from the repository (or create a new one) and set your secrets:
     ```bash
@@ -82,9 +83,8 @@ OR
     ```
     Then fill in:
     ```
-    FLASK_ENV=development
-    NASA_FIRMS_API_KEY=YourNasaKey
-    MAPBOX_ACCESS_TOKEN=YourMapboxToken
+    CPU_THRESHOLD=25
+    MEMORY_THRESHOLD_GB=8
     ```
 
 2. Do not edit or delete any files in data folder
@@ -103,153 +103,62 @@ python app.py
 cd frontend
 node app.js
 ```
+
+**Note:** Ensure data directories exist (`data/modis`) and proper configurations are made in `.env` before starting.
+
 ---
 
 ## Api
+
 backend site for testing: http://localhost:5000/
 
-### 1. `/api/forecast_stream` (GET)
-**Description:**  
-This endpoint performs fire occurrence forecasting for a given country using historical MODIS data and recent FIRMS data. It streams progress updates using **Server-Sent Events (SSE)**.
-
-#### Query Parameters  
-| Parameter      | Type   | Description |
-|---------------|--------|-------------|
-| `country_name` | string | Name of the country (e.g., "Australia") |
-| `map_key`      | string | API key for accessing FIRMS data |
-| `days`         | int    | Number of recent days to consider for forecasting |
-| `start_date`   | string | Start date for the forecast (YYYY-MM-DD) |
-| `periods`      | int    | Number of days to forecast |
-
-#### Response  
-- **Streams progress updates** in the form of JSON objects:
-  - `progress`: Progress percentage (0-100)
-  - `phase`: `"loading"` (data loading) or `"forecasting"` (model prediction)
-  - `message`: Current status message
-- **Final response includes:**
-  - `annual_fire_counts`: Historical fire counts per year
-  - `probabilities`: List of predicted fire probabilities per forecast day
-
----
-
-### 2. `/api/convert_parquet` (GET)
-**Description:**  
-Converts a large **Parquet** file back into individual **CSV** files while **throttling CPU and memory usage**. Streams progress updates using **Server-Sent Events (SSE)**.
-
-#### Query Parameters (Optional)  
-| Parameter       | Type   | Default Value      | Description |
-|---------------|--------|------------------|-------------|
-| `parquet_file` | string | `combined.parquet` | Path to the Parquet file to be converted |
-| `output_dir`   | string | `recovered_csv` | Output directory for recovered CSV files |
-
-#### Response  
-- **Streams JSON progress updates**:
-  - `progress`: Percentage (0-100)
-  - `phase`: `"starting"`, `"converting"`, `"waiting for CPU"`, `"waiting for memory"`, `"done"`
-  - `message`: Status message (e.g., "Processed row group 3 of 10")
-- **Final response**: `"Conversion complete"`
-
----
-
-### 3. `/api/data` (GET)
-**Description:**  
-Retrieves all fire occurrence data for a selected **year** and **country**.
-
-#### Query Parameters  
-| Parameter  | Type   | Description |
-|-----------|--------|-------------|
-| `year`    | int    | The year for which data is requested |
-| `country` | string | Country name (e.g., "Australia") |
-
-#### Response  
-- JSON list of fire records, each containing:
-  - `latitude`
-  - `longitude`
-  - `brightness`
-  - `acq_date`
-  - `acq_time`
-  - `daynight`
-  - `type`
-- **Error:** `{ "error": "Data not found" }` (if no data available)
-
----
-
-### 4. `/api/detail` (POST)
-**Description:**  
-Retrieves detailed fire occurrence information for a **specific data point**.
-
-#### Request Body (JSON)  
-```json
-{
-  "year": "2024",
-  "country": "Australia",
-  "latitude": "-25.2744",
-  "longitude": "133.7751",
-  "acq_date": "2024-01-15",
-  "acq_time": "1230"
-}
+### Setup
+- Ensure Python dependencies are installed:
+```bash
+pip install -r requirements.txt
+```
+- Set environment variables (CPU and memory thresholds):
+```env
+CPU_THRESHOLD=25
+MEMORY_THRESHOLD_GB=8
 ```
 
-#### Response  
-- JSON list of matching fire records  
-- **Error:** `"error"` if no match found
+### API Endpoints
 
----
+#### ✅ **Check Data Availability**
+`GET /api/check_data`
+- Verifies existence of required datasets (`combined.parquet`, CSV files in `data/modis`).
 
-### 5. `/api/countries` (GET)
-**Description:**  
-Retrieves a list of **available countries** for a given **year**.
+#### ⬇️ **Download Data**
+`GET /api/download_data`
+- Downloads `combined.parquet` from Cloudflare R2 if not already available locally.
+- Streams progress updates via SSE.
 
-#### Query Parameters  
-| Parameter | Type | Description |
-|----------|------|-------------|
-| `year`   | int  | The year for which countries should be listed |
+#### 🔄 **Convert Parquet to CSV**
+`GET /api/convert_data`
+- Converts Parquet files to CSV in the `data/modis` directory.
+- Streams real-time conversion progress via SSE.
 
-#### Response  
-```json
-{
-  "year": "2024",
-  "countries": ["Australia", "Brazil", "USA"]
-}
-```
-- **Error:** `{ "error": "Year not found" }` (if no data exists for that year)
+#### 📈 **Forecast Fire Occurrences**
+`GET /api/forecast_stream?country_name=...&map_key=...&days=...&start_date=...&periods=...`
+- Forecasts wildfire occurrences using SARIMA based on historical MODIS data.
+- Streams progress and results via SSE.
 
----
+#### 📊 **Get Data for Specific Year and Country**
+`GET /api/data?year=...&country=...`
+- Retrieves wildfire incident details (latitude, longitude, brightness, date, time, etc.) for the specified year and country.
 
-### 6. `/api/countriesMeta` (GET)
-**Description:**  
-Returns metadata information about countries from `countries.json`.
+#### 🔎 **Get Detailed Data Point**
+`POST /api/detail`
+- Provides detailed information about a specific wildfire event, given year, country, latitude, longitude, acquisition date, and time.
 
-#### Response  
-- JSON data loaded from `countries.json`  
-- **Error:** `{ "error": "countries.json not found" }`
+#### 🌍 **List Available Countries**
+`GET /api/countries?year=...`
+- Lists all countries available for a specific year based on stored CSV files.
 
----
-
-### 7. `/` (Home Page)
-**Description:**  
-Serves the **frontend UI** from `index.html`. Used for rendering the website.
-
----
-
-### How to Use the API
-
-#### Real-time progress tracking (SSE-based requests):
-Use `/api/forecast_stream` or `/api/convert_parquet`.
-Example (JavaScript for SSE):
-```js
-const eventSource = new EventSource("http://localhost:5000/api/convert_parquet");
-eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    console.log("Progress:", data.progress, "%");
-};
-```
-
-#### Retrieving historical data:
-- `/api/data?year=2024&country=Australia`
-
-#### Retrieving country metadata:
-- `/api/countriesMeta`
+#### 🌐 **Countries Metadata**
+`GET /api/countriesMeta`
+- Returns metadata from `countries.json`.
 
 ## License
 
