@@ -6,13 +6,16 @@ import numpy as np
 import time
 import psutil
 import pyarrow.parquet as pq
+import pyarrow as pa
 import threading
 import boto3
+import zipfile, io, joblib
 from flask import Flask, render_template, request, jsonify, Response
 from flask_cors import CORS, cross_origin
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from tqdm.auto import tqdm
 from dotenv import load_dotenv
+from datetime import datetime, timedelta, timezone
 load_dotenv()
 
 
@@ -23,15 +26,17 @@ CPU_THRESHOLD = float(os.getenv("CPU_THRESHOLD", "25"))
 MEMORY_THRESHOLD_GB = float(os.getenv("MEMORY_THRESHOLD_GB", "8"))
 
 # -------------------------------
-# R2 / S3 Configuration (for download endpoint)
+# Config: R2 / S3 Configuration
 # -------------------------------
 ACCOUNT_ID = "53ccada8fa16739b20397e6113693cd0"
 BUCKET_NAME = "fires"
 CLIENT_ACCESS_KEY = "4c3e3dee1bc5d8d5b9a9c94bc55e2c5c"
 CLIENT_SECRET = "3569eae5164d74e09093731e1cf1ea9e5f7b7fa7936d5d76383d15cf35bb97fd"
 CONNECTION_URL = f"https://{ACCOUNT_ID}.r2.cloudflarestorage.com"
-FILE_KEY = "combined.parquet"  # File key in R2 bucket
-LOCAL_PARQUET = "./combined.parquet"  # Local Parquet file path
+FILE_KEY_1 = "combined.parquet"
+FILE_KEY_2 = "predict_package.model"
+LOCAL_PARQUET = "./combined.parquet"
+LOCAL_MODEL = "./predict_package.model"
 
 s3 = boto3.client(
     "s3",
@@ -41,41 +46,153 @@ s3 = boto3.client(
 )
 
 # -------------------------------
-# Conversion generator (using your note code)
+# Config: Prediction
 # -------------------------------
-def convert_parquet_to_csv_stream(parquet_file_path, output_base):
+PACKAGE_PATH = "predict_package.model"
+
+# -------------------------------
+# Function: Prediction
+# -------------------------------
+def predict_from_package(country: str, start_date: str, package_path: str = PACKAGE_PATH) -> dict:
+    # 1) Load meta, model, and processed data from the single .model (zip)
+    with zipfile.ZipFile(package_path, 'r') as zf:
+        # metadata
+        with zf.open(f"{country}_meta.json") as mf:
+            meta = json.load(io.TextIOWrapper(mf, encoding='utf-8'))
+        # model
+        with zf.open(f"{country}.joblib") as modf:
+            model = joblib.load(modf)
+        # processed parquet
+        buf = io.BytesIO(zf.read(f"{country}_processed.parquet"))
+        table = pq.read_table(buf)
+        proc = table.to_pandas()
+
+    # 2) Prediction logic (same as before)
+    proc["acq_date"] = pd.to_datetime(proc["acq_date"])
+    sd = pd.to_datetime(start_date)
+    results = []
+
+    for area in meta["areas"]:
+        subset = proc[proc.area == area]
+        anchor = min(proc.acq_date.max(), sd)
+        last = subset[subset.acq_date == anchor]
+        if last.empty:
+            continue
+        base = last.iloc[-1]
+
+        rows = []
+        for day in range(7):
+            d = sd + timedelta(days=day)
+            row = {}
+            for feat in meta["features"]:
+                if feat == "area_code":
+                    row["area_code"] = meta["area_map"].get(area, -1)
+                else:
+                    row[feat] = base.get(feat, 0)
+            # cyclical date features
+            doy = d.timetuple().tm_yday
+            m = d.month
+            row.update({
+                "day_of_year": doy,
+                "day_sin": np.sin(2 * np.pi * doy / 365.25),
+                "day_cos": np.cos(2 * np.pi * doy / 365.25),
+                "month": m,
+                "month_sin": np.sin(2 * np.pi * m / 12),
+                "month_cos": np.cos(2 * np.pi * m / 12),
+            })
+            rows.append(row)
+
+        df_in = pd.DataFrame(rows)
+        preds = model.predict(df_in[meta["features"]])
+        weekly_prob = 1 - np.prod(1 - preds)
+        results.append({
+            "area": area,
+            "fire_risk_percent": round(weekly_prob * 100, 2)
+        })
+
+    country_pct = round(np.mean([r["fire_risk_percent"] for r in results]), 2)
+
+    return {
+        "country": country,
+        "country_area_percentage": country_pct,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "prediction_period": {
+            "start": sd.isoformat(),
+            "end": (sd + timedelta(days=6)).isoformat()
+        },
+        "predictions": sorted(results, key=lambda x: -x["fire_risk_percent"])
+    }
+
+# -------------------------------
+# Function: Conversion generator
+# -------------------------------
+def split_parquet_by_year_stream(parquet_file_path, output_base):
     """
-    Reads the Parquet file in row groups and converts each group to CSV files
-    (grouped by the 'relative_path' column). Yields SSE-formatted JSON progress updates.
+    Reads the entire Parquet file into a single DataFrame, groups by 'year',
+    and writes each subset to a separate {year}.parquet.
+    Yields SSE-style messages to track progress.
     """
     os.makedirs(output_base, exist_ok=True)
-    pf = pq.ParquetFile(parquet_file_path)
-    num_row_groups = pf.num_row_groups
-    yield f"data: {json.dumps({'progress': 0, 'phase': 'converting', 'message': f'Number of row groups: {num_row_groups}'})}\n\n"
 
-    for rg in range(num_row_groups):
+    # Start reading
+    yield f"data: {json.dumps({'progress': 0, 'phase': 'reading', 'message': f'Start reading {parquet_file_path}'})}\n\n"
+
+    df = pd.read_parquet(parquet_file_path)
+
+    yield f"data: {json.dumps({'progress': None, 'phase': 'reading', 'message': 'Finished reading Parquet into DataFrame'})}\n\n"
+
+    # Group by 'year' column
+    years = df['year'].unique()
+    total_years = len(years)
+    yield f"data: {json.dumps({'progress': 0, 'phase': 'grouping', 'message': f'Found {total_years} unique years'})}\n\n"
+
+    # Iterate over each unique year and write the subset
+    for i, year_val in enumerate(sorted(years)):
         cpu_usage = psutil.cpu_percent(interval=0.1)
         if cpu_usage > CPU_THRESHOLD:
             yield f"data: {json.dumps({'progress': None, 'phase': 'throttling', 'message': f'High CPU usage: {cpu_usage}%, sleeping 0.5 sec'})}\n\n"
             time.sleep(0.5)
-        table = pf.read_row_group(rg)
-        df_chunk = table.to_pandas()
-        for rel_path, group in df_chunk.groupby('relative_path'):
-            output_file = os.path.join(output_base, rel_path)
-            os.makedirs(os.path.dirname(output_file), exist_ok=True)
-            group_clean = group.drop(columns=['year', 'country', 'source_file', 'relative_path'])
-            if os.path.exists(output_file):
-                group_clean.to_csv(output_file, mode='a', header=False, index=False)
-            else:
-                group_clean.to_csv(output_file, mode='w', header=True, index=False)
-            yield f"data: {json.dumps({'progress': None, 'phase': 'converting', 'message': f'Written chunk to: {output_file}'})}\n\n"
-        progress = int((rg + 1) / num_row_groups * 100)
-        yield f"data: {json.dumps({'progress': progress, 'phase': 'converting', 'message': f'Processed row group {rg + 1} of {num_row_groups}'})}\n\n"
+
+        # Filter rows for this year
+        group_df = df[df['year'] == year_val]
+
+        # Convert to PyArrow Table
+        table = pa.Table.from_pandas(group_df)
+
+        out_file = f"{year_val}.parquet"
+        out_path = os.path.join(output_base, out_file)
+
+        # Write each subset to its own Parquet
+        pq.write_table(table, out_path, compression="snappy")
+
+        # SSE progress update
+        progress_percent = int((i + 1) / total_years * 100)
+        yield f"data: {json.dumps({'progress': progress_percent, 'phase': 'splitting', 'message': f'Wrote {out_path}'})}\n\n"
+
         mem_usage_gb = psutil.virtual_memory().used / (1024 ** 3)
         if mem_usage_gb > MEMORY_THRESHOLD_GB:
-            yield f"data: {json.dumps({'progress': progress, 'phase': 'throttling', 'message': f'High memory usage: {mem_usage_gb:.2f}GB, sleeping 1 sec'})}\n\n"
+            yield f"data: {json.dumps({'progress': progress_percent, 'phase': 'throttling', 'message': f'High memory usage: {mem_usage_gb:.2f}GB, sleeping 1 sec'})}\n\n"
             time.sleep(1)
-    yield f"data: {json.dumps({'progress': 100, 'phase': 'done', 'message': 'Conversion complete'})}\n\n"
+
+    # Done
+    yield f"data: {json.dumps({'progress': 100, 'phase': 'done', 'message': 'Split by year complete'})}\n\n"
+
+# -------------------------------
+# Endpoint: Check Data
+# -------------------------------
+@app.route('/api/predict', methods=['POST'])
+@cross_origin(origins='http://localhost:3000')
+def predict_route():
+    payload = request.get_json(force=True)
+    country = payload.get('country')
+    start_date = payload.get('start_date')
+    if not country or not start_date:
+        return jsonify({'error': 'country and start_date required'}), 400
+    try:
+        result = predict_from_package(country, start_date)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # -------------------------------
 # Endpoint: Check Data
@@ -85,26 +202,42 @@ def convert_parquet_to_csv_stream(parquet_file_path, output_base):
 def check_data():
     """
     Checks if:
-      - combined.parquet exists,
+      - combined.parquet exists
+      - predict_package.model exists
       - the CSV folder (data/modis) exists and contains files
     Returns a JSON object with the status of each.
     """
     combined_exists = os.path.exists(LOCAL_PARQUET)
+    model_exists = os.path.exists(LOCAL_MODEL)
 
-    modis_dir = os.path.join('data', 'modis')
-    modis_exists = False
+    # Check for modis data files
+    if os.path.isdir("./data/modis"):
+        if not os.listdir("./data/modis"):
+            print("False")
+            modis_exists = False
+        else:
+            print("True")
+            modis_exists = True
+    else:
+        print("False")
+        modis_exists = False
 
-    if os.path.isdir(modis_dir):
-        csv_files = []
-        for root, dirs, files in os.walk(modis_dir):
-            csv_files.extend([f for f in files if f.endswith('.csv')])
-        modis_exists = bool(csv_files)
+    if os.path.isdir("./data/modis"):
+        parquet_files = []
+        for root, dirs, files in os.walk("./data/modis"):
+            parquet_files.extend([f for f in files if f.endswith('.parquet')])
+        modis_exists = bool(parquet_files)
 
     return jsonify({
         "combined_exists": combined_exists,
+        "model_exists": model_exists,
         "modis_exists": modis_exists
     })
 
+
+# -------------------------------
+# Endpoint: Data Setup
+# -------------------------------
 @app.route('/api/data_setup', methods=['GET'])
 @cross_origin(origins='http://localhost:3000')
 def data_setup():
@@ -124,6 +257,10 @@ def data_setup():
         # If the file does not exist or cannot be read, assume not set up.
         return jsonify({"data_setup": False})
 
+
+# -------------------------------
+# Endpoint: Set Data Setup
+# -------------------------------
 @app.route('/api/set_data_setup', methods=['POST'])
 @cross_origin(origins='http://localhost:3000')
 def set_data_setup():
@@ -139,8 +276,9 @@ def set_data_setup():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+
 # -------------------------------
-# Endpoint: Download Data from R2
+# Endpoint: Download Combined Parquet
 # -------------------------------
 @app.route('/api/download_data', methods=['GET'])
 @cross_origin(origins='http://localhost:3000')
@@ -152,7 +290,7 @@ def download_data():
       - drive_url: URL to download the file (default constructed from R2 settings)
       - parquet_file: Local filename (default: combined.parquet)
     """
-    drive_url = request.args.get('drive_url', f"{CONNECTION_URL}/{BUCKET_NAME}/{FILE_KEY}")
+    drive_url = request.args.get('drive_url', f"{CONNECTION_URL}/{BUCKET_NAME}/{FILE_KEY_1}")
     parquet_file = request.args.get('parquet_file', LOCAL_PARQUET)
 
     def generate():
@@ -162,7 +300,7 @@ def download_data():
 
         yield f"data: {json.dumps({'progress': 0, 'phase': 'download', 'message': 'combined.parquet not found. Starting download.'})}\n\n"
         try:
-            head = s3.head_object(Bucket=BUCKET_NAME, Key=FILE_KEY)
+            head = s3.head_object(Bucket=BUCKET_NAME, Key=FILE_KEY_1)
             total_length = head['ContentLength']
             progress_obj = {"transferred": 0, "total": total_length}
             download_error = [None]
@@ -178,7 +316,7 @@ def download_data():
 
             def download():
                 try:
-                    s3.download_file(BUCKET_NAME, FILE_KEY, parquet_file, Callback=callback)
+                    s3.download_file(BUCKET_NAME, FILE_KEY_1, parquet_file, Callback=callback)
                 except Exception as e:
                     download_error[0] = str(e)
 
@@ -201,17 +339,172 @@ def download_data():
 
 
 # -------------------------------
-# Endpoint: Convert Data (Parquet -> CSV in data/modis)
+# Endpoint: Download Model
+# -------------------------------
+@app.route('/api/download_model', methods=['GET'])
+@cross_origin(origins='http://localhost:3000')
+def download_model():
+    """
+    Downloads the predict_package.model file from R2 if not already present.
+    Streams progress updates as SSE messages.
+    """
+
+    def generate():
+        if os.path.exists(LOCAL_MODEL):
+            yield f"data: {json.dumps({'progress': 100, 'phase': 'download skip', 'message': 'predict_package.model already exists'})}\n\n"
+            return
+
+        yield f"data: {json.dumps({'progress': 0, 'phase': 'download', 'message': 'predict_package.model not found. Starting download.'})}\n\n"
+        try:
+            head = s3.head_object(Bucket=BUCKET_NAME, Key=FILE_KEY_2)
+            total_length = head['ContentLength']
+            progress_obj = {"transferred": 0, "total": total_length}
+            download_error = [None]
+
+            class ProgressPercentage:
+                def __init__(self, progress):
+                    self._progress = progress
+
+                def __call__(self, bytes_amount):
+                    self._progress["transferred"] += bytes_amount
+
+            callback = ProgressPercentage(progress_obj)
+
+            def download():
+                try:
+                    s3.download_file(BUCKET_NAME, FILE_KEY_2, LOCAL_MODEL, Callback=callback)
+                except Exception as e:
+                    download_error[0] = str(e)
+
+            download_thread = threading.Thread(target=download)
+            download_thread.start()
+            while download_thread.is_alive():
+                current_progress = int((progress_obj["transferred"] / progress_obj["total"]) * 100)
+                yield f"data: {json.dumps({'progress': current_progress, 'phase': 'download', 'message': 'Downloading predict_package.model'})}\n\n"
+                time.sleep(0.5)
+            download_thread.join()
+            if download_error[0]:
+                yield f"data: {json.dumps({'progress': None, 'phase': 'error', 'message': 'Download error: ' + download_error[0]})}\n\n"
+                return
+            yield f"data: {json.dumps({'progress': 100, 'phase': 'download complete', 'message': 'Download complete'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'progress': None, 'phase': 'error', 'message': 'Download error: ' + str(e)})}\n\n"
+            return
+
+    return Response(generate(), mimetype='text/event-stream')
+
+
+# -------------------------------
+# Endpoint: Download Both Files
+# -------------------------------
+@app.route('/api/download_all', methods=['GET'])
+@cross_origin(origins='http://localhost:3000')
+def download_all():
+    """
+    Downloads both combined.parquet and predict_package.model files from R2 if not already present.
+    Streams progress updates as SSE messages for both files sequentially.
+    """
+
+    def generate():
+        # Check and download the parquet file first
+        if os.path.exists(LOCAL_PARQUET):
+            yield f"data: {json.dumps({'progress': 100, 'phase': 'download skip', 'message': 'combined.parquet already exists'})}\n\n"
+        else:
+            yield f"data: {json.dumps({'progress': 0, 'phase': 'download parquet', 'message': 'combined.parquet not found. Starting download.'})}\n\n"
+            try:
+                head = s3.head_object(Bucket=BUCKET_NAME, Key=FILE_KEY_1)
+                total_length = head['ContentLength']
+                progress_obj = {"transferred": 0, "total": total_length}
+                download_error = [None]
+
+                class ProgressPercentage:
+                    def __init__(self, progress):
+                        self._progress = progress
+
+                    def __call__(self, bytes_amount):
+                        self._progress["transferred"] += bytes_amount
+
+                callback = ProgressPercentage(progress_obj)
+
+                def download():
+                    try:
+                        s3.download_file(BUCKET_NAME, FILE_KEY_1, LOCAL_PARQUET, Callback=callback)
+                    except Exception as e:
+                        download_error[0] = str(e)
+
+                download_thread = threading.Thread(target=download)
+                download_thread.start()
+                while download_thread.is_alive():
+                    current_progress = int((progress_obj["transferred"] / progress_obj["total"]) * 100)
+                    yield f"data: {json.dumps({'progress': current_progress, 'phase': 'download parquet', 'message': 'Downloading combined.parquet'})}\n\n"
+                    time.sleep(0.5)
+                download_thread.join()
+                if download_error[0]:
+                    yield f"data: {json.dumps({'progress': None, 'phase': 'error', 'message': 'Download error for parquet: ' + download_error[0]})}\n\n"
+                    return
+                yield f"data: {json.dumps({'progress': 100, 'phase': 'download parquet complete', 'message': 'Parquet download complete'})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'progress': None, 'phase': 'error', 'message': 'Download error for parquet: ' + str(e)})}\n\n"
+                return
+
+        # Now check and download the model file
+        if os.path.exists(LOCAL_MODEL):
+            yield f"data: {json.dumps({'progress': 100, 'phase': 'download skip', 'message': 'predict_package.model already exists'})}\n\n"
+        else:
+            yield f"data: {json.dumps({'progress': 0, 'phase': 'download model', 'message': 'predict_package.model not found. Starting download.'})}\n\n"
+            try:
+                head = s3.head_object(Bucket=BUCKET_NAME, Key=FILE_KEY_2)
+                total_length = head['ContentLength']
+                progress_obj = {"transferred": 0, "total": total_length}
+                download_error = [None]
+
+                class ProgressPercentage:
+                    def __init__(self, progress):
+                        self._progress = progress
+
+                    def __call__(self, bytes_amount):
+                        self._progress["transferred"] += bytes_amount
+
+                callback = ProgressPercentage(progress_obj)
+
+                def download():
+                    try:
+                        s3.download_file(BUCKET_NAME, FILE_KEY_2, LOCAL_MODEL, Callback=callback)
+                    except Exception as e:
+                        download_error[0] = str(e)
+
+                download_thread = threading.Thread(target=download)
+                download_thread.start()
+                while download_thread.is_alive():
+                    current_progress = int((progress_obj["transferred"] / progress_obj["total"]) * 100)
+                    yield f"data: {json.dumps({'progress': current_progress, 'phase': 'download model', 'message': 'Downloading predict_package.model'})}\n\n"
+                    time.sleep(0.5)
+                download_thread.join()
+                if download_error[0]:
+                    yield f"data: {json.dumps({'progress': None, 'phase': 'error', 'message': 'Download error for model: ' + download_error[0]})}\n\n"
+                    return
+                yield f"data: {json.dumps({'progress': 100, 'phase': 'download model complete', 'message': 'Model download complete'})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'progress': None, 'phase': 'error', 'message': 'Download error for model: ' + str(e)})}\n\n"
+                return
+
+        # All downloads complete
+        yield f"data: {json.dumps({'progress': 100, 'phase': 'all complete', 'message': 'All downloads complete'})}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')
+
+# -------------------------------
+# Endpoint: Convert Data (Parquet -> data/modis)
 # -------------------------------
 @app.route('/api/convert_data', methods=['GET'])
 @cross_origin(origins='http://localhost:3000')
 def convert_data():
     """
-    Converts the combined.parquet file into CSV files in the data/modis folder.
+    Converts the combined.parquet file in the data/modis folder.
     Streams progress updates as SSE messages.
     Query parameters:
       - parquet_file: Local filename (default: combined.parquet)
-      - output_dir: CSV output folder (default: data/modis)
+      - output_dir: output folder (default: data/modis)
     """
     parquet_file = request.args.get('parquet_file', LOCAL_PARQUET)
     output_dir = request.args.get('output_dir', os.path.join('data', 'modis'))
@@ -222,223 +515,35 @@ def convert_data():
             yield f"data: {json.dumps({'progress': 100, 'phase': 'complete', 'message': 'data/modis already exists. No conversion needed.'})}\n\n"
             return
         yield f"data: {json.dumps({'progress': 0, 'phase': 'conversion', 'message': 'Starting conversion to CSV in data/modis'})}\n\n"
-        yield from convert_parquet_to_csv_stream(parquet_file, output_dir)
+        yield from split_parquet_by_year_stream(parquet_file, output_dir)
 
     return Response(generate(), mimetype='text/event-stream')
 
 # ---------------------------------------------------
-# New generator function for converting Parquet to CSV
-# ---------------------------------------------------
-def forecast_fire_occurrence_stream(country_name, base_dir, map_key, country_abbrev, days, start_date, periods):
-    """
-    Generator that performs the forecasting in stages and yields progress updates
-    as SSE messages. At the end, it yields the final result.
-
-    The total progress is computed over two phases:
-      - Loading historical data: one iteration per year (2001-2024).
-      - Forecasting: one iteration per forecast day.
-    """
-    # Define phases
-    years = list(range(2001, 2025))
-    total_years = len(years)
-    total_steps = total_years + periods  # total steps for progress
-    current_step = 0
-    all_dfs = []
-
-    # Phase 1: Load historical data
-    for year in tqdm(years, desc="Loading data"):
-        file_name = f"{country_name.replace(' ', '_')}.csv"
-        file_path = os.path.join(base_dir, str(year), file_name)
-        if os.path.exists(file_path):
-            df_year = pd.read_csv(file_path)
-            all_dfs.append(df_year)
-        else:
-            print(f"File not found: {file_path}")
-        current_step += 1
-        progress = int(current_step / total_steps * 100)
-        yield f"data: {json.dumps({'progress': progress, 'phase': 'loading'})}\n\n"
-
-    df_historical = pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame()
-    if not df_historical.empty and 'type' in df_historical.columns:
-        df_historical = df_historical.drop('type', axis=1)
-
-    # Load recent data from NASA FIRMS API
-    url = f"https://firms.modaps.eosdis.nasa.gov/api/country/csv/{map_key}/MODIS_NRT/{country_abbrev}/{days}"
-    df_recent = pd.read_csv(url)
-    if 'country_id' in df_recent.columns:
-        df_recent = df_recent.drop('country_id', axis=1)
-
-    # Convert dates
-    df_historical['acq_date'] = pd.to_datetime(df_historical['acq_date'])
-    df_recent['acq_date'] = pd.to_datetime(df_recent['acq_date'])
-
-    # Aggregate data by day (summing the 'frp' values)
-    df_historical_agg = df_historical.groupby('acq_date')['frp'].sum().reset_index()
-    df_historical_agg.set_index('acq_date', inplace=True)
-    df_historical_agg = df_historical_agg.resample('D').sum().fillna(0)
-
-    # Fit SARIMA model on historical data
-    sarima_model = SARIMAX(df_historical_agg['frp'],
-                           order=(1, 1, 1),
-                           seasonal_order=(1, 1, 1, 12),
-                           enforce_stationarity=False,
-                           enforce_invertibility=False)
-    sarima_result = sarima_model.fit()
-
-    # Compute daily thresholds (90th percentile of frp for each day-of-year)
-    daily_thresholds = df_historical_agg.groupby(df_historical_agg.index.dayofyear)['frp'].quantile(0.90)
-
-    def frp_to_probability(frp, date):
-        day_of_year = date.dayofyear
-        threshold = daily_thresholds.get(day_of_year, daily_thresholds.mean())
-        return 0 if threshold == 0 else np.clip(frp / threshold, 0, 1) * 100
-
-    # Phase 2: Forecasting
-    future_dates = pd.date_range(start=start_date, periods=periods, freq='D')
-    future_forecast_results = sarima_result.get_forecast(steps=len(future_dates))
-    future_forecast_df = future_forecast_results.summary_frame()
-    future_forecast_df.index = future_dates
-
-    probabilities = []
-    for frp, date in zip(future_forecast_df['mean'], future_forecast_df.index):
-        probabilities.append(frp_to_probability(frp, date))
-        current_step += 1
-        progress = int(current_step / total_steps * 100)
-        yield f"data: {json.dumps({'progress': progress, 'phase': 'forecasting'})}\n\n"
-
-    future_forecast_df['fire_probability'] = probabilities
-
-    # Compute annual fire counts from historical data
-    df_historical['year'] = df_historical['acq_date'].dt.year
-    annual_fires = df_historical.groupby('year').size().rename('annual_fires')
-
-    # Prepare final forecast results
-    forecast_result = []
-    for date, prob in future_forecast_df['fire_probability'].items():
-        forecast_result.append({
-            "date": date.strftime("%Y-%m-%d"),
-            "fire_probability": prob
-        })
-    annual_fire_counts = annual_fires.to_dict()
-
-    final_result = {
-        "progress": 100,
-        "annual_fire_counts": annual_fire_counts,
-        "probabilities": forecast_result
-    }
-    # Send final result
-    yield f"data: {json.dumps(final_result)}\n\n"
-
-# ---------------------------------------------------
-# New generator function for converting Parquet to CSV
-# ---------------------------------------------------
-@app.route('/api/forecast_stream', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
-def forecast_stream():
-    """
-    Expects query parameters like:
-      country_name=Australia
-      map_key=your_map_key
-      days=10
-      start_date=2025-02-06
-      periods=10
-
-    The backend looks up the country abbreviation from data/countries_code.csv using the full country name.
-    It then starts the forecasting process and streams progress updates (and finally the forecast results)
-    using SSE (Server-Sent Events).
-    """
-    country_name = request.args.get('country_name')
-    map_key = request.args.get('map_key')
-    days = request.args.get('days')
-    start_date = request.args.get('start_date')
-    periods = request.args.get('periods')
-
-    # Validate parameters
-    if not country_name:
-        return jsonify({"error": "Missing country name"}), 400
-
-    # Look up the country abbreviation using the provided country name.
-    codes_file = os.path.join('data', 'countries_code.csv')
-    if not os.path.exists(codes_file):
-        return jsonify({"error": "Countries code file not found"}), 500
-
-    df_codes = pd.read_csv(codes_file, delimiter=',', quotechar='"', on_bad_lines='skip')
-    row = df_codes[df_codes['Country name'] == country_name]
-    if row.empty:
-        return jsonify({"error": "Invalid country name"}), 400
-
-    country_abbrev = row.iloc[0]['Abbreviation']
-    base_dir = os.path.join('data', 'modis')  # adjust as needed
-
-    def generate():
-        for message in forecast_fire_occurrence_stream(
-                country_name, base_dir, map_key, country_abbrev, days, start_date, int(periods)
-            ):
-            yield message
-
-    return Response(generate(), mimetype='text/event-stream')
-
-# ---------------------------------------------------
-# API to get all data for a selected year and country
-# ---------------------------------------------------
-@app.route('/api/data', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
-def get_data():
-    year = request.args.get('year')
-    country = request.args.get('country')
-    country = country.replace('_', ' ')
-    file_path = f'./data/modis/{year}/{country}.csv'
-
-    if not os.path.isfile(file_path):
-        return jsonify({'error': 'Data not found'}), 404
-
-    df = pd.read_csv(file_path, usecols=['latitude', 'longitude', 'brightness', 'acq_date', 'acq_time', 'daynight', 'type'])
-    return jsonify(df.to_dict(orient='records'))
-
-# ---------------------------------------------------
-# API to get details of a specific data point
-# ---------------------------------------------------
-@app.route('/api/detail', methods=['POST'])
-@cross_origin(origins='http://localhost:3000')
-def get_detail():
-    data = request.get_json()
-    file_path = f'./data/modis/{data["year"]}/{data["country"]}.csv'
-
-    if not os.path.isfile(file_path):
-        return 'error'
-
-    df = pd.read_csv(file_path)
-
-    detail = df[(df['latitude'].astype(str) == data['latitude']) &
-                (df['longitude'].astype(str) == data['longitude']) &
-                (df['acq_date'] == data['acq_date']) &
-                (df['acq_time'].astype(str) == data['acq_time'])]
-
-    return jsonify(detail.to_dict(orient='records'))
-
-# ---------------------------------------------------
-# New generator function for converting Parquet to CSV
+# Endpoint: Get available countries by year
 # ---------------------------------------------------
 @app.route('/api/countries', methods=['GET'])
 @cross_origin(origins='http://localhost:3000')
 def get_countries():
     year = request.args.get('year')
-    folder_path = f'./data/modis/{year}/'
+    # Path to the single Parquet file for this year
+    parquet_path = f'./data/modis/{year}.parquet'
 
-    if not os.path.exists(folder_path):
-        return jsonify({'error': 'Year not found'}), 404
+    # Verify the file actually exists
+    if not os.path.exists(parquet_path):
+        return jsonify({'error': f'Parquet file for year {year} not found'}), 404
 
-    # Get all CSV files in data/modis/{year}
-    csv_files = glob.glob(os.path.join(folder_path, '*.csv'))
+    # Read just the 'country' column (assuming it exists)
+    df = pd.read_parquet(parquet_path, columns=['country'])
 
-    # Use the filename (without the .csv extension) as the country name
-    countries = [os.path.splitext(os.path.basename(file))[0] for file in csv_files]
+    # Extract unique country names
+    countries = df['country'].unique().tolist()
 
     # Return a JSON response with the year and list of countries
     return jsonify({'year': year, 'countries': countries})
 
 # ---------------------------------------------------
-# New generator function for converting Parquet to CSV
+# Endpoint: Get Map setup point for frontend
 # ---------------------------------------------------
 @app.route('/api/countriesMeta', methods=['GET'])
 @cross_origin(origins='http://localhost:3000')
@@ -455,13 +560,101 @@ def get_countries_meta():
     return jsonify(data)
 
 # ---------------------------------------------------
-# Home page simulation
+# Endpoint: Get basic data point
+# ---------------------------------------------------
+@app.route('/api/data', methods=['GET'])
+@cross_origin(origins='http://localhost:3000')
+def get_data():
+    year = request.args.get('year')
+    country = request.args.get('country')
+    # Replace underscores with spaces to match your naming convention
+    # country = country.replace('_', ' ')
+
+    # Example path to the Parquet file for the given year
+    parquet_path = f'./data/modis/{year}.parquet'
+
+    # Check if the file exists
+    if not os.path.isfile(parquet_path):
+        return jsonify({'error': 'Data not found'}), 404
+
+    # Read the Parquet file, including the 'country' column so we can filter
+    cols_to_read = ['latitude', 'longitude', 'brightness', 'acq_date',
+                    'acq_time', 'daynight', 'type', 'country']
+    df = pd.read_parquet(parquet_path, columns=cols_to_read)
+
+    # Filter for the requested country
+    df_filtered = df[df['country'] == country]
+
+    # If you don’t want to return the country in the final JSON, drop it
+    # df_filtered = df_filtered.drop(columns='country')
+
+    # Convert to list of records (JSON) and return
+    return jsonify(df_filtered.to_dict(orient='records'))
+
+# ---------------------------------------------------
+# Endpoint: Return details from input data point
+# ---------------------------------------------------
+@app.route('/api/detail', methods=['POST'])
+@cross_origin(origins='http://localhost:3000')
+def get_detail():
+    data = request.get_json()
+
+    year = data["year"]
+    country = data["country"]
+    lat_str = data["latitude"]    # as string
+    lon_str = data["longitude"]   # as string
+    acq_date = data["acq_date"]
+    acq_time_str = data["acq_time"]
+
+    # Construct the path to {year}.parquet
+    parquet_path = f'./data/modis/{year}.parquet'
+
+    if not os.path.isfile(parquet_path):
+        return jsonify({'error': f'{parquet_path} not found'}), 404
+
+    # Columns needed for final filtering
+    needed_cols = ['latitude', 'longitude', 'acq_date', 'acq_time', 'daynight', 'country', 'type', 'brightness']
+
+    # 1) Read only rows matching 'country' using filters (predicate pushdown)
+    #    This significantly reduces how much data is loaded if row group stats are available.
+    try:
+        # 'filters' was added in PyArrow 0.15+; works best if your file's row groups are chunked by country
+        table = pq.read_table(
+            parquet_path,
+            columns=needed_cols,
+            filters=[('country', '=', country)]  # pushdown filter
+        )
+    except pa.lib.ArrowInvalid as e:
+        # If there's some mismatch or older version that doesn't support filters well, fallback to read all
+        # , columns=needed_cols
+        table = pq.read_table(parquet_path)
+
+    # Convert the filtered Arrow table to a Pandas DataFrame
+    df_country = table.to_pandas()
+
+    # 2) Now filter further by lat/long/date/time
+    #    If your lat/lon are stored as floats, consider converting lat_str/lon_str to floats for numeric comparisons
+    detail = df_country[
+        (df_country['latitude'].astype(str) == lat_str) &
+        (df_country['longitude'].astype(str) == lon_str) &
+        (df_country['acq_date'] == acq_date) &
+        (df_country['acq_time'].astype(str) == acq_time_str)
+    ]
+
+    return jsonify(detail.to_dict(orient='records'))
+
+# ---------------------------------------------------
+# Endpoint: API Testing
 # ---------------------------------------------------
 @app.route('/')
 @cross_origin(origins='http://localhost:3000')
 def index():
     return render_template('index.html')
 
+@app.route("/prediction")
+@cross_origin(origins='http://localhost:3000')
+def prediction():
+    return render_template("prediction.html")
 
 
 if __name__ == '__main__':
