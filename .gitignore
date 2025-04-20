@@ -8,3 +8,4 @@
 .env
 backend/combined.parquet
 backend/predict_package.model
+/frontend/node_modules
