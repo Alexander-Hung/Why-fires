@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fire Risk Predictor</title>
+</head>
+<body>
+  <h1>7‑Day Fire Risk Prediction</h1>
+  <form id="predict-form">
+    <label>
+      Country:
+      <input type="text" id="country" value="united_states" required>
+    </label><br><br>
+    <label>
+      Start Date:
+      <input type="date" id="start_date" value="2025-04-19" required>
+    </label><br><br>
+    <button type="submit">Predict</button>
+  </form>
+  <pre id="result" style="background:#f0f0f0;padding:1em;"></pre>
+
+  <script>
+    document.getElementById('predict-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const country = document.getElementById('country').value;
+      const start_date = document.getElementById('start_date').value;
+      const resp = await fetch('/api/predict', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({country, start_date})
+      });
+      const data = await resp.json();
+      document.getElementById('result').textContent =
+        JSON.stringify(data, null, 2);
+    });
+  </script>
+</body>
+</html>

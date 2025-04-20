@@ -485,7 +485,6 @@ function buildDetailHTML(record) {
   const lat = record.latitude || 'unknown lat';
   const lon = record.longitude || 'unknown lon';
   const bright = record.brightness || 'N/A';
-  const satellite = record.satellite || 'unknown';
   const daynight = record.daynight ? dayNightMapping[record.daynight] : 'unknown';
   const typeDesc = typeMapping[record.type] || 'unknown';
 
@@ -511,7 +510,6 @@ function buildDetailHTML(record) {
       <b>Type:</b> ${typeDesc}
     </div>
     <br />
-    <i style="color: darkgray;">Taken by Satellite ${satellite}</i>
   `;
 }
 
@@ -851,6 +849,9 @@ function checkData() {
                   document.getElementById("downloadOverlay").style.display = "none";
                 } else {
                   document.getElementById("downloadOverlay").style.display = "flex";
+
+                  // Update UI to show status of parquet and model files
+                  updateFileStatusUI(result.combined_exists, result.model_exists);
                 }
               })
               .catch(err => {
@@ -865,21 +866,39 @@ function checkData() {
       });
 }
 
+// Update UI based on file availability
+function updateFileStatusUI(parquetExists, modelExists) {
+  const statusElement = document.getElementById("filesStatus");
+  if (!statusElement) return;
+
+  let statusText = "";
+  if (parquetExists && modelExists) {
+    statusText = "All files are available, but conversion is needed.";
+  } else if (parquetExists) {
+    statusText = "Dataset file is available. Model file needs to be downloaded.";
+  } else if (modelExists) {
+    statusText = "Model file is available. Dataset file needs to be downloaded.";
+  } else {
+    statusText = "Both dataset and model files need to be downloaded.";
+  }
+
+  statusElement.textContent = statusText;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   checkData();
 });
 
-
 // -----------------------------
-// Download Data via /api/download_data
+// Download All Data via /api/download_all
 // -----------------------------
 function startDownload() {
   const progressElem = document.getElementById("firstProgressBar");
   const textElem = document.getElementById("progressText");
   const messageElem = document.getElementById("downloadMessage");
 
-  const url = 'http://localhost:5000/api/download_data';
-  console.log("Starting download via:", url);
+  const url = 'http://localhost:5000/api/download_all';
+  console.log("Starting downloads via:", url);
   const eventSource = new EventSource(url);
 
   eventSource.onmessage = function(event) {
@@ -893,10 +912,22 @@ function startDownload() {
       if (data.phase) {
         messageElem.textContent = data.phase + ": " + data.message;
       }
-      // When download completes or is skipped, trigger conversion.
-      if ((data.phase === "download complete" || data.phase === "download skip") && data.progress === 100) {
+
+      // When both downloads complete, trigger conversion
+      if (data.phase === "all complete" && data.progress === 100) {
         eventSource.close();
         startConversion();
+      }
+      // Handle individual file downloads completing
+      else if ((data.phase === "download parquet complete" ||
+              data.phase === "download model complete") &&
+          data.progress === 100) {
+        // Continue listening for next file download events
+        // The eventSource will be closed when "all complete" is received
+      }
+      // Handle download skips
+      else if (data.phase === "download skip" && data.progress === 100) {
+        // Just update message but continue listening
       }
     } catch (err) {
       console.error("Error parsing download SSE:", err);
@@ -972,7 +1003,66 @@ document.getElementById("startDownloadBtn").addEventListener("click", function()
   // Reset progress display
   document.getElementById("firstProgressBar").value = 0;
   document.getElementById("progressText").textContent = "0%";
-  document.getElementById("downloadMessage").textContent = "Starting download...";
-  // Start the chain: download -> conversion.
+  document.getElementById("downloadMessage").textContent = "Starting downloads...";
+  // Start the chain: download both files -> conversion.
   startDownload();
+});
+
+// -----------------------------
+// Model-only download function
+// -----------------------------
+document.getElementById("downloadModelBtn").addEventListener("click", function() {
+  // Reset progress display
+  document.getElementById("firstProgressBar").value = 0;
+  document.getElementById("progressText").textContent = "0%";
+  document.getElementById("downloadMessage").textContent = "Starting model download...";
+
+  const progressElem = document.getElementById("firstProgressBar");
+  const textElem = document.getElementById("progressText");
+  const messageElem = document.getElementById("downloadMessage");
+
+  const url = 'http://localhost:5000/api/download_model';
+  console.log("Starting model download via:", url);
+  const eventSource = new EventSource(url);
+
+  eventSource.onmessage = function(event) {
+    console.log("Model Download SSE:", event.data);
+    try {
+      const data = JSON.parse(event.data);
+      if (data.progress !== null) {
+        progressElem.value = data.progress;
+        textElem.textContent = data.progress + "%";
+      }
+      if (data.phase) {
+        messageElem.textContent = data.phase + ": " + data.message;
+      }
+      if ((data.phase === "download complete" || data.phase === "download skip") && data.progress === 100) {
+        eventSource.close();
+        // Refresh file status after download
+        fetch('http://localhost:5000/api/check_data')
+            .then(response => response.json())
+            .then(result => {
+              updateFileStatusUI(result.combined_exists, result.model_exists);
+
+              // Check if we can now proceed with conversion (if both files exist)
+              if (result.combined_exists && result.model_exists) {
+                setTimeout(() => {
+                  messageElem.textContent = "Model download complete. Ready for conversion.";
+                  if (confirm("Model download complete. Start data conversion now?")) {
+                    startConversion();
+                  }
+                }, 500);
+              }
+            });
+      }
+    } catch (err) {
+      console.error("Error parsing model download SSE:", err);
+    }
+  };
+
+  eventSource.onerror = function(error) {
+    console.error("Model download SSE error:", error);
+    eventSource.close();
+    alert("An error occurred during model download.");
+  };
 });
