@@ -5,4 +5,4 @@
 start cmd /k "cd backend && python app.py"
 
 :: Launch the frontend Node server
-start cmd /k "cd frondend && node app.js"
+start cmd /k "cd frontend && npm start"

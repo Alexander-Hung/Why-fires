@@ -5,4 +5,4 @@
 start cmd /k "cd backend && pip install -r requirements.txt"
 
 :: install the frontend Node server
-start cmd /k "cd frondend && npm install"
+start cmd /k "cd frontend && npm install"

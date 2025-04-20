@@ -178,7 +178,7 @@ def split_parquet_by_year_stream(parquet_file_path, output_base):
     yield f"data: {json.dumps({'progress': 100, 'phase': 'done', 'message': 'Split by year complete'})}\n\n"
 
 # -------------------------------
-# Endpoint: Check Data
+# Endpoint: Prediction
 # -------------------------------
 @app.route('/api/predict', methods=['POST'])
 @cross_origin(origins='http://localhost:3000')

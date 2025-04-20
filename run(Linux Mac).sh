@@ -16,5 +16,5 @@ elif [ "$OS" = "Linux" ]; then
 else
   echo "Unsupported OS. Please open two terminals manually:"
   echo "  1) cd backend && python app.py"
-  echo "  2) cd frondend && node app.js"
+  echo "  2) cd frontend && npm start"
 fi
