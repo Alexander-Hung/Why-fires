@@ -11,7 +11,7 @@ if [ "$OS" = "Darwin" ]; then
 elif [ "$OS" = "Linux" ]; then
   # Linux: Use gnome-terminal (or x-terminal-emulator) if installed
   gnome-terminal -- bash -c "cd backend && python app.py; exec bash"
-  gnome-terminal -- bash -c "cd frondend && node app.js; exec bash"
+  gnome-terminal -- bash -c "cd frontend && node app.js; exec bash"
 
 else
   echo "Unsupported OS. Please open two terminals manually:"

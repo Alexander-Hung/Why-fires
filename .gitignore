@@ -1,6 +1,6 @@
-/frondend/node_modules
+/frontend/node_modules
 /backend/.idea
-/frondend/.idea
+/frontend/.idea
 /.idea
 /backend/note
 /backend/data/modis
@@ -8,4 +8,3 @@
 .env
 backend/combined.parquet
 backend/predict_package.model
-/frontend/node_modules
