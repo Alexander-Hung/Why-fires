@@ -1,5 +1,5 @@
 import React from 'react';
-import { ForecastResults } from './ForecastResults';
+import { PredictionResults } from './PredictionResults';
 import { ProgressOverlay } from './ProgressOverlay';
 
 export const RightSidebar = ({
@@ -9,7 +9,7 @@ export const RightSidebar = ({
                                  progressValue,
                                  progressPhase,
                                  showResults,
-                                 mlResults
+                                 predictionData
                              }) => {
     return (
         <>
@@ -22,14 +22,9 @@ export const RightSidebar = ({
                     />
                 )}
 
-                {/* ML Results */}
-                {showResults && (
-                    <div className="Row" id="mlResults" style={{ display: 'grid' }}>
-                        <ForecastResults
-                            annualCounts={mlResults.annualCounts}
-                            probabilities={mlResults.probabilities}
-                        />
-                    </div>
+                {/* Prediction Results */}
+                {showResults && predictionData && (
+                    <PredictionResults predictionData={predictionData} />
                 )}
             </div>
 

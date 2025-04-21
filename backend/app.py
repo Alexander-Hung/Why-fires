@@ -1,6 +1,5 @@
 import pandas as pd
 import os
-import glob
 import json
 import numpy as np
 import time
@@ -12,8 +11,6 @@ import boto3
 import zipfile, io, joblib
 from flask import Flask, render_template, request, jsonify, Response
 from flask_cors import CORS, cross_origin
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-from tqdm.auto import tqdm
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 load_dotenv()
@@ -186,6 +183,7 @@ def predict_route():
     payload = request.get_json(force=True)
     country = payload.get('country')
     start_date = payload.get('start_date')
+    country = country.lower()
     if not country or not start_date:
         return jsonify({'error': 'country and start_date required'}), 400
     try:

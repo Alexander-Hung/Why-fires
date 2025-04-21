@@ -43,17 +43,14 @@ const App = () => {
     });
 
     // Prediction state
-    const [predictionParams, setPredictionParams] = useState({
-        mapKey: localStorage.getItem('map_key') || '',
-        days: '',
-        periods: '',
-        startDate: ''
-    });
     const [showProgress, setShowProgress] = useState(false);
     const [progress, setProgress] = useState(0);
     const [progressPhase, setProgressPhase] = useState('');
-    const [mlResults, setMlResults] = useState({ annualCounts: {}, probabilities: [] });
+    const [predictionData, setPredictionData] = useState(null);
     const [showMlResults, setShowMlResults] = useState(false);
+
+    // Area risk toggle state
+    const [showAreaRisk, setShowAreaRisk] = useState(false);
 
     // Refs
     const eventSourceRef = useRef(null);
@@ -93,13 +90,6 @@ const App = () => {
             setDataPointCount(filtered.length);
         }
     }, [currentData, typeFilters, selectedMonth, selectedDate]);
-
-    // Update map key in localStorage when it changes
-    useEffect(() => {
-        if (predictionParams.mapKey) {
-            localStorage.setItem('map_key', predictionParams.mapKey);
-        }
-    }, [predictionParams.mapKey]);
 
     // Cleanup event source on unmount
     useEffect(() => {
@@ -301,76 +291,83 @@ const App = () => {
         setShowDetailContainer(false);
     };
 
-    const startForecastStream = () => {
-        if (!selectedCountry || !predictionParams.mapKey ||
-            !predictionParams.days || !predictionParams.periods ||
-            !predictionParams.startDate) {
-            alert("Please fill in all prediction fields");
+    const startPrediction = () => {
+        if (!selectedCountry) {
+            alert("Please select a country for prediction");
             return;
         }
+
+        // Get today's date in YYYY-MM-DD format
+        const getTodayDate = () => {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
 
         // Show progress overlay and reset values
         setShowProgress(true);
         setProgress(0);
-        setProgressPhase('Starting...');
+        setProgressPhase('Loading model...');
         setShowMlResults(false);
+        setPredictionData(null);
 
         // Open right sidebar if not already open
         if (!rightSidebarOpen) {
             setRightSidebarOpen(true);
         }
 
-        // Build query string from parameters
-        const urlParams = new URLSearchParams({
-            country_name: selectedCountry,
-            map_key: predictionParams.mapKey,
-            days: predictionParams.days,
-            start_date: predictionParams.startDate,
-            periods: predictionParams.periods
-        });
-
-        const url = `http://localhost:5000/api/forecast_stream?${urlParams.toString()}`;
-
-        // Close any existing connection
-        if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-        }
-
-        // Create new EventSource connection
-        const eventSource = new EventSource(url);
-        eventSourceRef.current = eventSource;
-
-        eventSource.onmessage = function(event) {
-            try {
-                const data = JSON.parse(event.data);
-
-                if (data.progress !== undefined) {
-                    setProgress(data.progress);
-                    setProgressPhase(data.phase || 'Processing...');
+        // Simulate progress for visual feedback since we're making a direct API call
+        const progressInterval = setInterval(() => {
+            setProgress(prev => {
+                if (prev >= 90) {
+                    clearInterval(progressInterval);
+                    return prev;
                 }
+                return prev + 10;
+            });
+        }, 200);
 
-                if (data.progress === 100 && data.annual_fire_counts && data.probabilities) {
-                    setMlResults({
-                        annualCounts: data.annual_fire_counts,
-                        probabilities: data.probabilities
-                    });
+        // Call the new API endpoint with today's date
+        fetch('http://localhost:5000/api/predict', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                country: selectedCountry,
+                start_date: getTodayDate()
+            })
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to get predictions');
+                }
+                return response.json();
+            })
+            .then(data => {
+                clearInterval(progressInterval);
+                setProgress(100);
+                setProgressPhase('Prediction complete!');
+
+                // Update state with prediction data
+                setPredictionData(data);
+                setShowMlResults(true);
+
+                // Hide progress after a short delay
+                setTimeout(() => {
                     setShowProgress(false);
-                    setShowMlResults(true);
-                    eventSource.close();
-                    eventSourceRef.current = null;
-                }
-            } catch (err) {
-                console.error("Error parsing SSE message:", err);
-            }
-        };
-
-        eventSource.onerror = function(error) {
-            console.error("SSE connection error:", error);
-            eventSource.close();
-            eventSourceRef.current = null;
-            setShowProgress(false);
-            alert("Error connecting to forecast service");
-        };
+                }, 1000);
+            })
+            .catch(error => {
+                clearInterval(progressInterval);
+                console.error('Prediction error:', error);
+                setProgressPhase('Error: ' + error.message);
+                setTimeout(() => {
+                    setShowProgress(false);
+                }, 3000);
+            });
     };
 
     const checkDataAvailability = () => {
@@ -403,6 +400,10 @@ const App = () => {
             });
     };
 
+    const toggleAreaRisk = () => {
+        setShowAreaRisk(!showAreaRisk);
+    };
+
     return (
         <div className="app-container">
             {/* Main Map Section */}
@@ -413,6 +414,8 @@ const App = () => {
                         selectedCountry={selectedCountry}
                         countriesData={countriesData}
                         onPointClick={handleMapPointClick}
+                        showAreaRisk={showAreaRisk}
+                        predictionData={predictionData}
                     />
 
                     <Sidebar
@@ -429,10 +432,11 @@ const App = () => {
                         onCountryChange={setSelectedCountry}
                         typeFilters={typeFilters}
                         onTypeFilterChange={(newFilters) => setTypeFilters(newFilters)}
-                        predictionParams={predictionParams}
-                        onPredictionParamChange={(newParams) => setPredictionParams(newParams)}
-                        onStartPrediction={startForecastStream}
+                        onStartPrediction={startPrediction}
                         dataPointCount={dataPointCount}
+                        showAreaRisk={showAreaRisk}
+                        onToggleAreaRisk={toggleAreaRisk}
+                        predictionAvailable={predictionData !== null}
                     />
 
                     <RightSidebar
@@ -442,7 +446,7 @@ const App = () => {
                         progressValue={progress}
                         progressPhase={progressPhase}
                         showResults={showMlResults}
-                        mlResults={mlResults}
+                        predictionData={predictionData}
                     />
                 </div>
 
@@ -454,12 +458,14 @@ const App = () => {
                     />
                 )}
 
-                {/* Color Range Bar */}
-                <ColorRangeBar
-                    minValue={temperatureRange.min}
-                    maxValue={temperatureRange.max}
-                    hidden={rightSidebarOpen}
-                />
+                {/* Color Range Bar - hide when showing area risk */}
+                {!showAreaRisk && (
+                    <ColorRangeBar
+                        minValue={temperatureRange.min}
+                        maxValue={temperatureRange.max}
+                        hidden={rightSidebarOpen}
+                    />
+                )}
             </div>
 
             {/* Download Overlay */}

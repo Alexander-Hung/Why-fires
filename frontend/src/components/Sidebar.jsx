@@ -18,10 +18,11 @@ export const Sidebar = ({
                             onCountryChange,
                             typeFilters,
                             onTypeFilterChange,
-                            predictionParams,
-                            onPredictionParamChange,
                             onStartPrediction,
-                            dataPointCount
+                            dataPointCount,
+                            showAreaRisk,
+                            onToggleAreaRisk,
+                            predictionAvailable
                         }) => {
     // State for expandable sections
     const [expandedSections, setExpandedSections] = useState({
@@ -50,7 +51,7 @@ export const Sidebar = ({
 
     return (
         <>
-            <div className={`sidebar ${!isOpen ? 'is-closed' : ''}`} style={{height:'100vh'}}>
+            <div className={`sidebar ${!isOpen ? 'is-closed' : ''}`}>
                 <div>
                     <a href="https://github.com/Alexander-Hung/Why-fires">
                         <img
@@ -62,6 +63,7 @@ export const Sidebar = ({
                         />
                     </a>
                     <hr />
+                    <br />
 
                     <div id="sidebar-feature">
                         {/* Country Filter */}
@@ -112,10 +114,42 @@ export const Sidebar = ({
                         <PredictionFilter
                             expanded={expandedSections.prediction}
                             toggleExpand={() => toggleSection('prediction')}
-                            params={predictionParams}
-                            onChange={onPredictionParamChange}
                             onStartPrediction={onStartPrediction}
                         />
+
+                        <br />
+
+                        {/* Area Risk Toggle Button */}
+                        {predictionAvailable && (
+                            <div style={{ width: '100%', marginTop: '10px' }}>
+                                <button
+                                    onClick={onToggleAreaRisk}
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px',
+                                        backgroundColor: showAreaRisk ? '#e74c3c' : '#2ecc71',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontSize: '14px',
+                                        fontWeight: 'bold',
+                                        transition: 'background-color 0.3s ease',
+                                        marginBottom: '10px'
+                                    }}
+                                >
+                                    {showAreaRisk ? 'Show Data Points' : 'Show Area Risk'}
+                                </button>
+                                <div style={{
+                                    fontSize: '12px',
+                                    color: '#bdc3c7',
+                                    textAlign: 'center',
+                                    marginBottom: '15px'
+                                }}>
+                                    {showAreaRisk ? 'Currently showing area risk predictions' : 'Currently showing data points'}
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <br />
                     <div style={{ height: '27vh' }}></div> {/* Filler space */}
