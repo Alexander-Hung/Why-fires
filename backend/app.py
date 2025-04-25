@@ -1,19 +1,19 @@
 import pandas as pd
 import os
-import glob
 import json
 import numpy as np
 import time
+import glob
 import psutil
+import uuid
 import pyarrow.parquet as pq
 import pyarrow as pa
 import threading
+from werkzeug.exceptions import RequestTimeout
 import boto3
 import zipfile, io, joblib
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, session
 from flask_cors import CORS, cross_origin
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-from tqdm.auto import tqdm
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 load_dotenv()
@@ -24,6 +24,13 @@ CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
 CPU_THRESHOLD = float(os.getenv("CPU_THRESHOLD", "25"))
 MEMORY_THRESHOLD_GB = float(os.getenv("MEMORY_THRESHOLD_GB", "8"))
+DATA_FOLDER = "data/modis"  # Added this for consistency with analysis endpoints
+
+# Global dict to track analysis progress for different sessions
+analysis_progress = {}
+
+# Flag to signal analysis to stop
+should_stop_analysis = False
 
 # -------------------------------
 # Config: R2 / S3 Configuration
@@ -177,15 +184,193 @@ def split_parquet_by_year_stream(parquet_file_path, output_base):
     # Done
     yield f"data: {json.dumps({'progress': 100, 'phase': 'done', 'message': 'Split by year complete'})}\n\n"
 
+
+# ------------------------------
+# Analysis Functions
+# ------------------------------
+def progress_update(value, session_id=None):
+    """
+    Update the progress tracker for a specific session
+    """
+    global analysis_progress
+
+    # Use a default session ID if none provided
+    if session_id is None:
+        session_id = 'default'
+
+    # Store the progress value
+    if session_id not in analysis_progress:
+        analysis_progress[session_id] = {"value": 0, "last_update": time.time()}
+
+    analysis_progress[session_id]["value"] = value
+    analysis_progress[session_id]["last_update"] = time.time()
+
+    print(f"Progress updated for session {session_id}: {value}%")  # Debug output
+
+def apply_filters(df, filters):
+    """Apply the provided filters to the DataFrame"""
+    # Filter by countries if specified
+    countries = filters.get('countries', [])
+    if countries:
+        df = df[df['country'].isin(countries)]
+
+    # Filter by date range if specified
+    date_range = filters.get('dateRange', {})
+    start_date = date_range.get('start')
+    end_date = date_range.get('end')
+
+    if start_date:
+        df = df[df['acq_date'] >= start_date]
+    if end_date:
+        df = df[df['acq_date'] <= end_date]
+
+    # Filter by confidence level if specified
+    confidence_range = filters.get('confidenceRange', {})
+    min_confidence = confidence_range.get('min')
+    max_confidence = confidence_range.get('max')
+
+    if min_confidence is not None:
+        df = df[df['confidence'] >= min_confidence]
+    if max_confidence is not None:
+        df = df[df['confidence'] <= max_confidence]
+
+    # Filter by day/night if specified
+    daynight = filters.get('daynight')
+    if daynight:
+        df = df[df['daynight'] == daynight]
+
+    # Filter by fire type if specified
+    fire_type = filters.get('type')
+    if fire_type is not None:  # Use 'is not None' because fire_type could be 0
+        df = df[df['type'] == fire_type]
+
+    return df
+
+
+def generate_analysis(df):
+    """Generate analysis results from the filtered data"""
+    # Create a copy to avoid SettingWithCopyWarning
+    df_analysis = df.copy()
+
+    # Get list of countries and check if only one is selected
+    unique_countries = df_analysis['country'].unique().tolist()
+    single_country_selected = len(unique_countries) == 1
+    selected_country = unique_countries[0] if single_country_selected else ""
+
+    print(f"Countries in data: {unique_countries}")
+    print(f"Single country selected: {single_country_selected}, Country: {selected_country}")
+
+    # Check if 'area' column exists
+    has_area_column = 'area' in df_analysis.columns
+    print(f"Has 'area' column: {has_area_column}")
+
+    # Only create a placeholder if the 'area' column doesn't exist
+    if not has_area_column:
+        print("'area' column not found in data, adding placeholder")
+        # Create areas based on latitude/longitude grid (simplified for demonstration)
+        if 'latitude' in df_analysis.columns and 'longitude' in df_analysis.columns:
+            # Round coordinates to create area "buckets"
+            df_analysis['area'] = df_analysis.apply(
+                lambda row: f"Region {round(row['latitude'], 1)}/{round(row['longitude'], 1)}",
+                axis=1
+            )
+        else:
+            # Fallback if no coordinates
+            df_analysis['area'] = "Unknown Area"
+    else:
+        # If 'area' column exists but has null values, replace nulls with "Unknown Area"
+        if df_analysis['area'].isnull().any():
+            print("Replacing null area values with 'Unknown Area'")
+            df_analysis['area'] = df_analysis['area'].fillna("Unknown Area")
+
+        # Check the first few areas to see what's in the data
+        print("Sample area values:", df_analysis['area'].head(5).tolist())
+
+    # Convert acq_date to datetime if it's not already
+    if not pd.api.types.is_datetime64_any_dtype(df_analysis['acq_date']):
+        df_analysis['acq_date'] = pd.to_datetime(df_analysis['acq_date'])
+
+    # Create month and day fields for temporal analysis
+    df_analysis['month'] = df_analysis['acq_date'].dt.month
+    df_analysis['day'] = df_analysis['acq_date'].dt.day
+
+    # Basic statistics
+    stats = {
+        "total_fires": len(df_analysis),
+        "avg_brightness": float(df_analysis['brightness'].mean()),
+        "avg_confidence": float(df_analysis['confidence'].mean()),
+        "avg_frp": float(df_analysis['frp'].mean()),
+        "day_fires": int(df_analysis[df_analysis['daynight'] == 'D'].shape[0]),
+        "night_fires": int(df_analysis[df_analysis['daynight'] == 'N'].shape[0])
+    }
+
+    # Time series data by month
+    monthly_data = df_analysis.groupby('month').size().reset_index(name='count')
+    monthly_data = monthly_data.to_dict(orient='records')
+
+    # Country-wise data
+    country_data = df_analysis.groupby('country').size().reset_index(name='count')
+    country_data = country_data.sort_values('count', ascending=False).head(10)
+    country_data = country_data.to_dict(orient='records')
+
+    # Area-wise data (if single country selected)
+    area_data = []
+    if single_country_selected:
+        # Group by area
+        area_data = df_analysis.groupby('area').size().reset_index(name='count')
+        area_data = area_data.sort_values('count', ascending=False).head(10)
+        area_data = area_data.to_dict(orient='records')
+        print(f"Area data for {selected_country} (count: {len(area_data)}):", area_data)
+
+    # FRP distribution by confidence
+    frp_confidence = df_analysis.groupby('confidence')['frp'].mean().reset_index()
+    frp_confidence = frp_confidence.to_dict(orient='records')
+
+    # Day vs Night comparison by month
+    day_night_monthly = df_analysis.groupby(['month', 'daynight']).size().reset_index(name='count')
+    day_night_monthly = day_night_monthly.to_dict(orient='records')
+
+    # Year over year comparison if multiple years
+    year_data = df_analysis.groupby('year').size().reset_index(name='count')
+    year_data = year_data.to_dict(orient='records')
+
+    # Selection info
+    selection_info = {
+        "single_country_selected": single_country_selected,
+        "selected_country": selected_country,
+        "has_area_data": len(area_data) > 0
+    }
+
+    data = {
+        "monthly": monthly_data,
+        "country": country_data,
+        "area": area_data,
+        "frp_confidence": frp_confidence,
+        "day_night_monthly": day_night_monthly,
+        "yearly": year_data,
+        "selection_info": selection_info
+    }
+
+    return {"data": data, "stats": stats}
+
+
+
+
+
+
+
+
+
+
 # -------------------------------
-# Endpoint: Check Data
+# Endpoint: Prediction
 # -------------------------------
 @app.route('/api/predict', methods=['POST'])
-@cross_origin(origins='http://localhost:3000')
 def predict_route():
     payload = request.get_json(force=True)
     country = payload.get('country')
     start_date = payload.get('start_date')
+    country = country.lower()
     if not country or not start_date:
         return jsonify({'error': 'country and start_date required'}), 400
     try:
@@ -198,7 +383,6 @@ def predict_route():
 # Endpoint: Check Data
 # -------------------------------
 @app.route('/api/check_data', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
 def check_data():
     """
     Checks if:
@@ -234,12 +418,10 @@ def check_data():
         "modis_exists": modis_exists
     })
 
-
 # -------------------------------
 # Endpoint: Data Setup
 # -------------------------------
 @app.route('/api/data_setup', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
 def data_setup():
     """
     Reads a file called DATA_SETUP (expected to contain "True" or "False").
@@ -257,12 +439,10 @@ def data_setup():
         # If the file does not exist or cannot be read, assume not set up.
         return jsonify({"data_setup": False})
 
-
 # -------------------------------
 # Endpoint: Set Data Setup
 # -------------------------------
 @app.route('/api/set_data_setup', methods=['POST'])
-@cross_origin(origins='http://localhost:3000')
 def set_data_setup():
     """
     Receives a JSON payload like {"data_setup": true} and writes "True" or "False" to the DATA_SETUP file.
@@ -276,12 +456,10 @@ def set_data_setup():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 # -------------------------------
 # Endpoint: Download Combined Parquet
 # -------------------------------
 @app.route('/api/download_data', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
 def download_data():
     """
     Downloads the combined.parquet file from R2 if not already present.
@@ -337,12 +515,10 @@ def download_data():
 
     return Response(generate(), mimetype='text/event-stream')
 
-
 # -------------------------------
 # Endpoint: Download Model
 # -------------------------------
 @app.route('/api/download_model', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
 def download_model():
     """
     Downloads the predict_package.model file from R2 if not already present.
@@ -393,12 +569,10 @@ def download_model():
 
     return Response(generate(), mimetype='text/event-stream')
 
-
 # -------------------------------
 # Endpoint: Download Both Files
 # -------------------------------
 @app.route('/api/download_all', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
 def download_all():
     """
     Downloads both combined.parquet and predict_package.model files from R2 if not already present.
@@ -497,7 +671,6 @@ def download_all():
 # Endpoint: Convert Data (Parquet -> data/modis)
 # -------------------------------
 @app.route('/api/convert_data', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
 def convert_data():
     """
     Converts the combined.parquet file in the data/modis folder.
@@ -519,11 +692,58 @@ def convert_data():
 
     return Response(generate(), mimetype='text/event-stream')
 
+# -------------------------------
+# Endpoint: Years
+# -------------------------------
+@app.route('/api/analyze/years', methods=['GET'])
+def get_years():
+    """Return available years from the data folder"""
+    try:
+        # List all parquet files in the data folder
+        parquet_files = glob.glob(os.path.join(DATA_FOLDER, "*.parquet"))
+        years = [os.path.splitext(os.path.basename(file))[0] for file in parquet_files]
+        return jsonify({"success": True, "years": sorted(years)})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ---------------------------------------------------
+# Endpoint: Get available countries by year
+# ---------------------------------------------------
+@app.route('/api/analyze/countries', methods=['GET'])
+def get_analyze_countries():
+    """Return all countries from the data"""
+    try:
+        years = request.args.getlist('year')
+
+        # If specific years are provided, get countries from those years' data
+        if years:
+            countries = set()
+            for year in years:
+                file_path = os.path.join(DATA_FOLDER, f"{year}.parquet")
+                if os.path.exists(file_path):
+                    df = pd.read_parquet(file_path)
+                    countries.update(df['country'].unique())
+
+            countries = list(countries)
+        else:
+            # Otherwise, get all countries from all years
+            countries = set()
+            parquet_files = glob.glob(os.path.join(DATA_FOLDER, "*.parquet"))
+
+            for file in parquet_files:
+                df = pd.read_parquet(file)
+                countries.update(df['country'].unique())
+
+            countries = list(countries)
+
+        return jsonify({"success": True, "countries": sorted(countries)})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # ---------------------------------------------------
 # Endpoint: Get available countries by year
 # ---------------------------------------------------
 @app.route('/api/countries', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
 def get_countries():
     year = request.args.get('year')
     # Path to the single Parquet file for this year
@@ -546,7 +766,6 @@ def get_countries():
 # Endpoint: Get Map setup point for frontend
 # ---------------------------------------------------
 @app.route('/api/countriesMeta', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
 def get_countries_meta():
     """
     Reads data/countries.json and returns it as JSON.
@@ -563,7 +782,6 @@ def get_countries_meta():
 # Endpoint: Get basic data point
 # ---------------------------------------------------
 @app.route('/api/data', methods=['GET'])
-@cross_origin(origins='http://localhost:3000')
 def get_data():
     year = request.args.get('year')
     country = request.args.get('country')
@@ -585,7 +803,7 @@ def get_data():
     # Filter for the requested country
     df_filtered = df[df['country'] == country]
 
-    # If you don’t want to return the country in the final JSON, drop it
+    # If you don't want to return the country in the final JSON, drop it
     # df_filtered = df_filtered.drop(columns='country')
 
     # Convert to list of records (JSON) and return
@@ -595,7 +813,6 @@ def get_data():
 # Endpoint: Return details from input data point
 # ---------------------------------------------------
 @app.route('/api/detail', methods=['POST'])
-@cross_origin(origins='http://localhost:3000')
 def get_detail():
     data = request.get_json()
 
@@ -613,7 +830,7 @@ def get_detail():
         return jsonify({'error': f'{parquet_path} not found'}), 404
 
     # Columns needed for final filtering
-    needed_cols = ['latitude', 'longitude', 'acq_date', 'acq_time', 'daynight', 'country', 'type', 'brightness']
+    needed_cols = ['latitude', 'longitude', 'acq_date', 'acq_time', 'daynight', 'country', 'type', 'brightness', 'area']
 
     # 1) Read only rows matching 'country' using filters (predicate pushdown)
     #    This significantly reduces how much data is loaded if row group stats are available.
@@ -644,15 +861,195 @@ def get_detail():
     return jsonify(detail.to_dict(orient='records'))
 
 # ---------------------------------------------------
+# New Endpoint: Analyze Data
+# ---------------------------------------------------
+@app.route('/api/progress/<session_id>', methods=['GET'])
+def get_progress(session_id):
+    """
+    Server-Sent Events endpoint to stream progress updates to the client
+    """
+
+    def generate():
+        global analysis_progress
+
+        if session_id not in analysis_progress:
+            analysis_progress[session_id] = {"value": 0, "last_update": time.time()}
+
+        print(f"Progress connection established for session {session_id}")
+
+        # Send initial progress
+        data = json.dumps({"progress": analysis_progress[session_id]["value"]})
+        yield f"data: {data}\n\n"
+
+        last_value = analysis_progress[session_id]["value"]
+
+        while True:
+            # Check if progress has been updated
+            if session_id in analysis_progress:
+                current_value = analysis_progress[session_id]["value"]
+                if current_value != last_value:
+                    data = json.dumps({"progress": current_value})
+                    yield f"data: {data}\n\n"
+                    print(f"Sent progress update to client: {current_value}%")  # Debug output
+                    last_value = current_value
+
+                    # If progress is 100% or 0%, break the loop after a short delay
+                    if current_value >= 100 or current_value == 0:
+                        time.sleep(1)  # Give the client time to process
+                        break
+
+                # Check for stale connections (no updates for 60 seconds)
+                if time.time() - analysis_progress[session_id]["last_update"] > 60:
+                    print(f"Session {session_id} timed out")
+                    break
+            else:
+                # Session no longer exists
+                break
+
+            time.sleep(0.5)  # Check every 500ms
+
+        # Clean up
+        if session_id in analysis_progress:
+            del analysis_progress[session_id]
+
+        print(f"Progress connection closed for session {session_id}")
+
+    # Set response headers for SSE
+    return Response(generate(), mimetype="text/event-stream")
+
+
+@app.route('/api/analyze/stop', methods=['POST'])
+def stop_analysis():
+    """
+    Stop the analysis process
+    """
+    global should_stop_analysis
+    should_stop_analysis = True
+
+    # Get session ID from request
+    data = request.json
+    session_id = data.get('session_id', 'default')
+
+    # Reset progress to 0
+    progress_update(0, session_id)
+
+    return jsonify({
+        'success': True,
+        'message': 'Analysis stop signal sent'
+    })
+
+
+@app.route('/api/analyze', methods=['POST'])
+def analyze_data():
+    """Filter and analyze data based on provided criteria"""
+    global should_stop_analysis
+    should_stop_analysis = False  # Reset at the start
+
+    # Generate a unique session ID for this analysis
+    session_id = str(uuid.uuid4())
+
+    try:
+        filters = request.json
+        print(f"Starting analysis for session {session_id}")
+
+        # Initial progress
+        progress_update(0, session_id)
+
+        # Return the session ID to the client for progress tracking
+        response_data = {
+            "session_id": session_id
+        }
+
+        # Start the actual processing
+        # Simulate processing time for progress bar
+        time.sleep(1)  # Simulating 25% progress
+        progress_update(25, session_id)
+
+        # Check if we should stop
+        if should_stop_analysis:
+            progress_update(0, session_id)  # Reset progress
+            return jsonify({"success": False, "error": "Analysis was stopped by user", **response_data})
+
+        # Load data based on selected years
+        years = filters.get('years', [])
+        if not years:
+            # If no years selected, use all years
+            parquet_files = glob.glob(os.path.join(DATA_FOLDER, "*.parquet"))
+            years = [os.path.splitext(os.path.basename(file))[0] for file in parquet_files]
+
+        # Initialize an empty DataFrame to store the combined data
+        all_data = pd.DataFrame()
+
+        # For each selected year, load and filter the data
+        for i, year in enumerate(years):
+            # Check if we should stop
+            if should_stop_analysis:
+                progress_update(0, session_id)  # Reset progress
+                return jsonify({"success": False, "error": "Analysis was stopped by user", **response_data})
+
+            file_path = os.path.join(DATA_FOLDER, f"{year}.parquet")
+            if os.path.exists(file_path):
+                df = pd.read_parquet(file_path)
+
+                time.sleep(0.5)  # Simulate processing time
+                current_progress = 25 + (i + 1) * 50 // len(years)
+                progress_update(current_progress, session_id)
+
+                # Apply filters
+                df = apply_filters(df, filters)
+
+                # Append to the combined data
+                all_data = pd.concat([all_data, df])
+
+        if all_data.empty:
+            progress_update(100, session_id)  # Set to complete
+            return jsonify({
+                "success": True,
+                "message": "No data found matching the criteria",
+                "data": {},
+                "stats": {},
+                **response_data
+            })
+
+        # Check if we should stop
+        if should_stop_analysis:
+            progress_update(0, session_id)  # Reset progress
+            return jsonify({"success": False, "error": "Analysis was stopped by user", **response_data})
+
+        # Sleep for another second to simulate processing
+        time.sleep(1)
+        progress_update(90, session_id)
+        print(f"Analysis 90% complete for session {session_id}")
+
+        # Generate statistics and analysis results
+        results = generate_analysis(all_data)
+
+        # Final processing
+        progress_update(100, session_id)
+        print(f"Analysis 100% complete for session {session_id}")
+
+        return jsonify({
+            "success": True,
+            "message": "Analysis completed successfully",
+            "data": results["data"],
+            "stats": results["stats"],
+            **response_data
+        })
+    except Exception as e:
+        print(f"Error in analyze_data for session {session_id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        progress_update(0, session_id)  # Reset progress on error
+        return jsonify({"success": False, "error": str(e), "session_id": session_id}), 500
+
+# ---------------------------------------------------
 # Endpoint: API Testing
 # ---------------------------------------------------
 @app.route('/')
-@cross_origin(origins='http://localhost:3000')
 def index():
     return render_template('index.html')
 
 @app.route("/prediction")
-@cross_origin(origins='http://localhost:3000')
 def prediction():
     return render_template("prediction.html")
 
