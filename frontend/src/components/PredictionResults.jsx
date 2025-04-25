@@ -31,33 +31,22 @@ export const PredictionResults = ({ predictionData }) => {
         <div style={{ padding: '20px', height: '100%', overflow: 'auto' }}>
             {/* Country Overview */}
             <div style={{
-                backgroundColor: '#2c3e50',
-                borderRadius: '8px',
+                textAlign: 'center',
+                fontSize: '24px',
+                marginBottom: '15px',
+                backgroundColor: getRiskColor(country_area_percentage),
                 padding: '20px',
-                marginBottom: '20px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                textAlign: 'center'
-            }}>
-                <h2 style={{ margin: '0 0 20px 0', fontSize: '24px' }}>{country}</h2>
+                borderRadius: '12px',
+                color: country_area_percentage >= 50 ? 'white' : 'black',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.2)'
+            }}><h2 style={{ margin: '0 0 20px 0', fontSize: '36px' }}>{country.charAt(0).toUpperCase() + country.slice(1)}</h2>
                 <div style={{
-                    fontSize: '24px',
-                    marginBottom: '15px',
-                    backgroundColor: getRiskColor(country_area_percentage),
-                    padding: '20px',
-                    borderRadius: '12px',
-                    color: country_area_percentage >= 50 ? 'white' : 'black',
-                    boxShadow: '0 4px 6px rgba(0,0,0,0.2)'
+                    fontSize: '36px',
+                    fontWeight: 'bold',
+                    lineHeight: '1'
                 }}>
-                    <div style={{ fontSize: '16px', marginBottom: '10px' }}>Country Fire Risk</div>
-                    <div style={{
-                        fontSize: '48px',
-                        fontWeight: 'bold',
-                        lineHeight: '1'
-                    }}>
-                        {country_area_percentage}%
-                    </div>
+                    {country_area_percentage}%
                 </div>
-
             </div>
 
             {/* Area Predictions */}
@@ -65,7 +54,7 @@ export const PredictionResults = ({ predictionData }) => {
                 <h3 style={{ marginBottom: '15px' }}>Area Predictions (Top 10)</h3>
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
                     gap: '15px'
                 }}>
                     {predictions.slice(0, 10).map((area, index) => (

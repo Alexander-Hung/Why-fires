@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TypeFilter } from './TypeFilter';
 import { DateFilter } from './DateFilter';
-import { PredictionFilter } from './PredictionFilter';
 import { DataCount } from './DataCount';
+import FilterPanel from './FilterPanel';
+import ProgressBar from './ProgressBar';
 
 export const Sidebar = ({
                             isOpen,
@@ -22,14 +23,36 @@ export const Sidebar = ({
                             dataPointCount,
                             showAreaRisk,
                             onToggleAreaRisk,
-                            predictionAvailable
+                            predictionAvailable,
+                            onAnalyze,
+                            onStopAnalyze,
+                            analyzeLoading,
+                            analyzeProgress
                         }) => {
     // State for expandable sections
     const [expandedSections, setExpandedSections] = useState({
         type: true,
         date: false,
-        prediction: false
+        prediction: false,
+        advanced: false
     });
+
+    // State for available years (for FilterPanel)
+    const [availableYears, setAvailableYears] = useState([]);
+
+    // Fetch available years when component mounts
+    useEffect(() => {
+        fetch('http://localhost:5000/api/analyze/years')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    setAvailableYears(data.years);
+                }
+            })
+            .catch(err => {
+                console.error('Error fetching years:', err);
+            });
+    }, []);
 
     const toggleSection = (section) => {
         setExpandedSections(prev => ({
@@ -110,46 +133,38 @@ export const Sidebar = ({
 
                         <br />
 
-                        {/* Prediction Filter */}
-                        <PredictionFilter
-                            expanded={expandedSections.prediction}
-                            toggleExpand={() => toggleSection('prediction')}
-                            onStartPrediction={onStartPrediction}
-                        />
-
-                        <br />
-
-                        {/* Area Risk Toggle Button */}
-                        {predictionAvailable && (
-                            <div style={{ width: '100%', marginTop: '10px' }}>
-                                <button
-                                    onClick={onToggleAreaRisk}
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px',
-                                        backgroundColor: showAreaRisk ? '#e74c3c' : '#2ecc71',
-                                        color: 'white',
-                                        border: 'none',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer',
-                                        fontSize: '14px',
-                                        fontWeight: 'bold',
-                                        transition: 'background-color 0.3s ease',
-                                        marginBottom: '10px'
-                                    }}
-                                >
-                                    {showAreaRisk ? 'Show Data Points' : 'Show Area Risk'}
-                                </button>
-                                <div style={{
-                                    fontSize: '12px',
-                                    color: '#bdc3c7',
-                                    textAlign: 'center',
-                                    marginBottom: '15px'
-                                }}>
-                                    {showAreaRisk ? 'Currently showing area risk predictions' : 'Currently showing data points'}
+                        {/* Advanced Filter Panel */}
+                        <div id="advancedFilterContainer">
+                            <div id="topSection3">
+                                <div id="topTitle3">Advanced Analysis</div>
+                                <div id="topButton3">
+                                    <button id="nope3" onClick={() => toggleSection('advanced')}></button>
                                 </div>
                             </div>
-                        )}
+
+                            <div id="expandContainer3" className={expandedSections.advanced ? 'expanded' : 'collapsed'}>
+                                <div id="expandContract3" className={expandedSections.advanced ? 'expanded' : 'collapsed'}>
+                                    <FilterPanel
+                                        years={availableYears}
+                                        countries={countries}
+                                        selectedCountry={selectedCountry}
+                                        onAnalyze={onAnalyze}
+                                        onStopAnalyze={onStopAnalyze}  // Add this line
+                                        disabled={analyzeLoading}
+                                        onStartPrediction={onStartPrediction}
+                                        showAreaRisk={showAreaRisk}
+                                        onToggleAreaRisk={onToggleAreaRisk}
+                                        predictionAvailable={predictionAvailable}
+                                        expanded={expandedSections.prediction}
+                                        toggleExpand={() => toggleSection('prediction')}
+                                        analyzeLoading={analyzeLoading}
+                                        analyzeProgress={analyzeProgress}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <br />
                     </div>
                     <br />
                     <div style={{ height: '27vh' }}></div> {/* Filler space */}
