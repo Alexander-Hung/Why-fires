@@ -1,0 +1,114 @@
+@import './common.css';
+@import './FormControls.css';
+
+/* Forecast button */
+#forecastButton {
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    padding: 8px;
+    font-size: 20px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 5px;
+    border: white solid 2px;
+    color: white;
+    background: var(--primaryColor);
+}
+
+#forecastButton:hover {
+    background-color: var(--toggleColor);
+    transition: .25s all ease;
+}
+
+/* Custom Prediction Dropdown Styles */
+.custom-prediction-dropdown {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+    flex: 1;
+    padding: 0 1em;
+    color: #fff;
+    background-color: var(--primaryColor);
+    cursor: pointer;
+    font-size: var(--fontSize);
+    height: 3em;
+    line-height: 3em;
+    width: 100%;
+    border-radius: 4px;
+}
+
+.custom-prediction-dropdown:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Make dropdown arrow match the custom styling */
+.prediction-dropdown-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.prediction-dropdown-wrapper::after {
+    content: '\25BC';
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 1em;
+    background-color: var(--secondaryColor);
+    transition: .25s all ease;
+    pointer-events: none;
+}
+
+.prediction-dropdown-wrapper:hover::after {
+    color: var(--toggleColor);
+}
+
+.prediction-dropdown-options {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    max-height: 150px;
+    overflow-y: auto;
+    background-color: var(--primaryColor);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    z-index: 1000;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.prediction-dropdown-option {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    cursor: pointer;
+    color: white;
+}
+
+.prediction-dropdown-option:hover {
+    background-color: var(--secondaryColor);
+}
+
+.prediction-dropdown-option input {
+    margin-right: 8px;
+}
+
+/* Fix scrollbar styling for the dropdown */
+.prediction-dropdown-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.prediction-dropdown-options::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+}
+
+.prediction-dropdown-options::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+.prediction-dropdown-options::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}

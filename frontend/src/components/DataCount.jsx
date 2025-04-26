@@ -1,4 +1,5 @@
 import React from 'react';
+import '../styles/DataCount.css';
 
 export const DataCount = ({ count }) => {
     // Format the count with commas for thousands separator

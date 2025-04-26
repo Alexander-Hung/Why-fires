@@ -1,7 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './stylesheet.css';
 
 // Import required external stylesheets
 document.head.innerHTML += `

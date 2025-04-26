@@ -1,0 +1,79 @@
+@import './common.css';
+@import './FormControls.css';
+
+/* Additional Sidebar specific styles to ensure responsive elements */
+.sidebar-inner-content {
+    width: 100%;
+    overflow-x: hidden;
+}
+
+.logo-container {
+    display: block;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.logo-image {
+    max-width: 100%;
+    height: auto;
+    width: auto;
+    max-height: 110px;
+}
+
+.filter-container {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+/* Ensure expandable sections adapt to width */
+#topSection, #topSection2, #topSection3, #topSection4 {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#expandContainer, #expandContainer2, #expandContainer3, #expandContainer4 {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#expandContract, #expandContract2, #expandContract3, #expandContract4 {
+    width: 100%;
+}
+
+/* Ensure the DateFilter component adapts to sidebar width */
+#dateContainer {
+    width: 100%;
+}
+
+/* Ensure the TypeFilter component adapts to sidebar width */
+#typeContainer {
+    width: 100%;
+}
+
+/* Ensure input ranges are responsive */
+input[type="range"] {
+    width: 100%;
+    max-width: 100%;
+}
+
+/* Make year/month display wrap if needed */
+#yearDisplay, #monthDisplay {
+    display: inline-block;
+    word-break: break-word;
+    max-width: 100%;
+}
+
+/* Ensure the DataCount component adapts to sidebar width */
+.data-count-container {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Ensure advanced filter container is responsive */
+#advancedFilterContainer {
+    width: 100%;
+}

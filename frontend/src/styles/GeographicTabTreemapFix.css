@@ -1,0 +1,44 @@
+/* Fix for the Geographic Heatmap/Treemap component */
+
+/* Specific container for the treemap */
+.chart-container.treemap-container {
+    height: auto !important;
+    max-height: 350px !important; /* Limit maximum height */
+    overflow: hidden;
+}
+
+/* Fix treemap positioning */
+.recharts-wrapper.treemap-wrapper {
+    height: 300px !important; /* Force fixed height */
+    max-height: 300px !important;
+    width: 100% !important;
+    overflow: hidden;
+}
+
+/* Constrain the treemap itself */
+.recharts-treemap {
+    height: 300px !important;
+    max-height: 300px !important;
+}
+
+/* Reduce animation complexity */
+.recharts-treemap-animation {
+    transition-duration: 0.3s !important; /* Shorter animation time */
+}
+
+/* Disable animation for problem cases */
+@media (max-width: 768px) {
+    .recharts-treemap-animation {
+        transition: none !important; /* Disable animation on smaller screens */
+    }
+}
+
+/* Ensure proper font size in treemap cells */
+.recharts-treemap text {
+    font-size: 12px !important;
+}
+
+/* Limit expansion effect */
+.recharts-treemap-depth-1:hover {
+    transform: scale(1.02) !important; /* Limit hover expansion */
+}

@@ -1,0 +1,66 @@
+@import './common.css';
+@import './FormControls.css';
+
+/* Filter section headers */
+#topSection, #topSection2, #topSection3, #topSection4 {
+    border-radius: .25em;
+    background-color: var(--primaryColor);
+    height: 3em;
+    box-sizing: border-box;
+}
+
+#topTitle, #topTitle2, #topTitle3, #topTitle4 {
+    display: inline-block;
+    padding: 15px;
+}
+
+#topButton, #topButton2, #topButton3, #topButton4 {
+    display: inline;
+    float: right;
+    width: 3em;
+    height: 3em;
+}
+
+#topButton button, #topButton2 button, #topButton3 button, #topButton4 button {
+    width: 100%;
+    height: 100%;
+    background-color: var(--secondaryColor);
+    border: 0;
+    border-radius: 0px .25em .25em 0px;
+}
+
+#topButton button::after, #topButton2 button::after, #topButton3 button::after, #topButton4 button::after {
+    content: '\25BC';
+    color: #fff;
+}
+
+#topButton button:hover::after, #topButton2 button:hover::after, #topButton3 button:hover::after, #topButton4 button:hover::after {
+    color: var(--toggleColor);
+    transition: .25s all ease;
+}
+
+/* Expandable containers */
+#expandContainer, #expandContainer2, #expandContainer3, #expandContainer4 {
+    overflow: hidden;
+    background-color: var(--primaryColor);
+    padding: 0px;
+    transition: all 0.5s;
+}
+
+#expandContainer.expanded, #expandContainer2.expanded, #expandContainer3.expanded, #expandContainer4.expanded {
+    padding: 15px;
+}
+
+#expandContract, #expandContract2 {
+    margin-top: -200%;
+    transition: all 0.5s;
+}
+
+#expandContract3, #expandContract4 {
+    margin-top: -500%;
+    transition: all 0.5s;
+}
+
+#expandContract.expanded, #expandContract2.expanded, #expandContract3.expanded, #expandContract4.expanded {
+    margin-top: 0;
+}

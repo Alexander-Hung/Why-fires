@@ -1,4 +1,5 @@
 import React from 'react';
+import '../styles/TypeFilter.css';
 
 export const TypeFilter = ({ expanded, toggleExpand, filters, onChange }) => {
     const handleChange = (e) => {

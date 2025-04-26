@@ -1,0 +1,6 @@
+@import './common.css';
+@import './FormControls.css';
+@import './TypeFilter.css';
+
+/* DateFilter component uses styles from TypeFilter for expandable sections */
+/* No additional styles needed as it inherits from the imports */

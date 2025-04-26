@@ -1,0 +1,23 @@
+@import './common.css';
+@import './Dashboard.css';
+
+/* Day/Night container styles */
+.day-night-container {
+    display: flex;
+    gap: 10px;
+    height: 100%;
+}
+
+.day-chart, .night-chart {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.day-chart h4, .night-chart h4 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+}

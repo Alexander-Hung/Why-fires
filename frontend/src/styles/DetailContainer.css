@@ -1,0 +1,57 @@
+@import './common.css';
+
+/* Detail container */
+#detailContainer {
+    position: absolute;
+    width: 250px;
+    margin: 15px;
+    padding: 15px;
+    color: white;
+    background-color: var(--bgColor);
+    z-index: 200;
+    transition: box-shadow 0.2s ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#detailContainer:hover {
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5);
+}
+
+.detail-header {
+    user-select: none;
+    position: relative;
+}
+
+#closeButton:hover {
+    color: #f39c12;
+    transform: scale(1.1);
+    transition: all 0.2s ease;
+}
+
+#detailBox {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1em 0 1em 0;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#detailBox::-webkit-scrollbar {
+    width: 6px;
+}
+
+#detailBox::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+#detailBox::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+#detailBox::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
