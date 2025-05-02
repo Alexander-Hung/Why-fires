@@ -125,13 +125,13 @@ MEMORY_THRESHOLD_GB=8
 
 ### API Endpoints
 
-[API Documents](./backend/API Docs.md)
+[API Documents](./backend/API_Docs.md)
 
 ---
 
 ## License
 
-[MIT License](./LICENSE]
+[MIT License](./LICENSE)
 
 ---
 
