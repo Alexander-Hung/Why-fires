@@ -104,19 +104,16 @@ const Dashboard = ({ results }) => {
         <div className="dashboard">
             {/* Dashboard Header with Filters Summary */}
             <div className="section-header">
-                <h2>Fire Analysis Dashboard</h2>
+                <div className="nav-tabs"><h2>Fire Analysis Dashboard: </h2>
+                    <div className="filter-actions" style={{ width: '75%' }}>
 
-                <div className="filter-actions">
-                    <button className="filter-actions-button" type="button">
-                        Export Report
-                    </button>
-
-                    <div className="filter-section">
+                        <div className="filter-section">
                         <span>
                             {singleCountrySelected
                                 ? `Analysis for ${selectedCountry}`
                                 : `Analysis for ${data.country.length} countries`}
                         </span>
+                        </div>
                     </div>
                 </div>
 

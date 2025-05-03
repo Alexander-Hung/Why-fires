@@ -134,7 +134,7 @@ export const Sidebar = ({
                 {/* Advanced Filter Panel */}
                 <div id="advancedFilterContainer">
                     <div id="topSection3">
-                        <div id="topTitle3">Advanced Analysis</div>
+                        <div id="topTitle3">Prediction & Analysis</div>
                         <div id="topButton3">
                             <button id="nope3" onClick={() => toggleSection('advanced')}></button>
                         </div>

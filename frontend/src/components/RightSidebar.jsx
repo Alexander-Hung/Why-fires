@@ -40,9 +40,6 @@ export const RightSidebar = ({
                 {/* Analysis Results/Dashboard Section */}
                 {analysisResults && (
                     <div className="analysis-results-section">
-                        <div className="section-header">
-                            <h2>Data Analysis</h2>
-                        </div>
                         <div className="dashboard-container">
                             <Dashboard results={analysisResults} />
                         </div>
