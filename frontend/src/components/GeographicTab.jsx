@@ -144,30 +144,6 @@ const GeographicTab = ({ chartData, titles }) => {
                 </div>
             </div>
 
-            {/* Additional Regional Distribution Map */}
-            <div className="chart-container">
-                <h3>Regional Fire Distribution By Percentage</h3>
-                <div className="regional-distribution">
-                    {pieData.slice(0, 8).map((item, index) => (
-                        <div key={index} className="region-column">
-                            <div
-                                className="region-bar"
-                                style={{
-                                    backgroundColor: item.color,
-                                    height: `${(item.value / Math.max(...pieData.map(d => d.value))) * 100}%`,
-                                }}
-                            ></div>
-                            <div className="region-label">
-                                <div className="region-name" title={item.name}>
-                                    {/* Truncate long names */}
-                                    {item.name.length > 8 ? `${item.name.substring(0, 6)}...` : item.name}
-                                </div>
-                                <div className="region-value">{((item.value / pieData.reduce((sum, d) => sum + d.value, 0)) * 100).toFixed(1)}%</div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
         </div>
     );
 };
