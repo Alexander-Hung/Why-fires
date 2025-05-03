@@ -1,0 +1,35 @@
+/* Styles to prevent text selection during sidebar resizing */
+body.resizing {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    cursor: ew-resize !important;
+}
+
+body.resizing * {
+    cursor: ew-resize !important;
+}
+
+/* Visual indicator for active resizing */
+.resize-handle.active::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(243, 156, 18, 0.3);
+    pointer-events: none;
+}
+
+/* Improve resize handle visibility on hover */
+.resize-handle:hover::before {
+    content: "⋮";
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 24px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}

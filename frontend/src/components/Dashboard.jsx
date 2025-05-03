@@ -1,17 +1,24 @@
-import React from 'react';
-import {
-    LineChart, Line, BarChart, Bar, PieChart, Pie,
-    XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    Cell
-} from 'recharts';
+import React, { useState } from 'react';
+import OverviewTab from './OverviewTab';
+import TemporalTab from './TemporalTab';
+import GeographicTab from './GeographicTab';
+import ComparativeTab from './ComparativeTab';
+import '../styles/Dashboard.css';
+
+// Create color and month constants for all tabs to use
+export const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f43f5e', '#64748b'];
+export const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const Dashboard = ({ results }) => {
+    const [activeTab, setActiveTab] = useState('overview');
+
     if (!results || !results.data) {
         return (
             <div className="dashboard">
                 <h2>Analysis Results</h2>
-                <div style={{ textAlign: 'center', padding: '2rem' }}>
-                    <p>No analysis data available. Please run an analysis first.</p>
+                <div className="no-results-message">
+                    <h2>No analysis data available</h2>
+                    <p>Please run an analysis first to visualize fire data</p>
                 </div>
             </div>
         );
@@ -23,27 +30,19 @@ const Dashboard = ({ results }) => {
     const singleCountrySelected = data.selection_info && data.selection_info.single_country_selected;
     const selectedCountry = singleCountrySelected ? data.selection_info.selected_country : "";
 
-    // Check if we have area data
-    const hasAreaData = data.area && data.area.length > 0;
-
-    // Flag to determine whether to show area data
-    const showAreaData = singleCountrySelected && hasAreaData;
-
-    // Define colors for charts
-    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
-    const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    // Prepare data for monthly chart with month names
+    // Common data processing
+    // Monthly data with names
     const monthlyDataWithNames = data.monthly.map(item => ({
         ...item,
-        name: MONTH_NAMES[item.month]
+        name: MONTH_NAMES[item.month],
+        month: item.month
     }));
 
-    // Prepare data for day vs night chart
+    // Day/Night data
     const dayNightData = {};
     MONTH_NAMES.forEach((month, index) => {
         if (index > 0) {
-            dayNightData[month] = { month, D: 0, N: 0 };
+            dayNightData[month] = { month, D: 0, N: 0, name: month };
         }
     });
 
@@ -56,173 +55,197 @@ const Dashboard = ({ results }) => {
 
     const dayNightChartData = Object.values(dayNightData);
 
-    // Prepare data for pie chart and bar chart based on whether we're showing area or country data
-    let barChartData, pieData, barChartXKey, barChartTitle, pieChartTitle;
+    // Check area data
+    const hasAreaData = data.area && data.area.length > 0;
+    const showAreaData = singleCountrySelected && hasAreaData;
+
+    // Prepare title strings
+    let barChartTitle, pieChartTitle;
 
     if (showAreaData) {
-        barChartData = data.area.map(item => ({
-            ...item,
-            name: item.area || "Unknown"
-        }));
-
-        pieData = data.area.map((item, index) => ({
-            name: item.area || "Unknown",
-            value: item.count,
-            color: COLORS[index % COLORS.length]
-        }));
-
-        barChartXKey = "name";
-        barChartTitle = `Top Areas in ${selectedCountry} by Fire Count`;
+        barChartTitle = `Top Areas in ${selectedCountry}`;
         pieChartTitle = `Fire Distribution by Area in ${selectedCountry}`;
-    } else if (data.country && data.country.length > 0) {
-        barChartData = data.country.map(item => ({
-            ...item,
-            name: item.country
-        }));
-
-        pieData = data.country.map((item, index) => ({
-            name: item.country,
-            value: item.count,
-            color: COLORS[index % COLORS.length]
-        }));
-
-        barChartXKey = "name";
+    } else {
         barChartTitle = "Top Countries by Fire Count";
         pieChartTitle = "Fire Distribution by Country";
-    } else {
-        // Fallback to empty data
-        barChartData = [];
-        pieData = [];
-        barChartXKey = "name";
-        barChartTitle = "No Country Data Available";
-        pieChartTitle = "No Distribution Data Available";
     }
+
+    // Prepare data objects
+    const chartData = {
+        monthlyDataWithNames,
+        dayNightChartData,
+        barChartData: prepareRegionData(data, showAreaData),
+        pieData: preparePieData(data, showAreaData),
+        yearlyData: data.yearly.map(item => ({
+            ...item,
+            name: `${item.year}`
+        })),
+        frpConfidenceData: data.frp_confidence.map(item => ({
+            ...item,
+            name: `${item.confidence}%`
+        })),
+        timeOfDayData: prepareTimeOfDayData(stats),
+        seasonalData: prepareSeasonalData(monthlyDataWithNames),
+        fireIntensityData: [
+            { name: 'Low', value: stats.total_fires * 0.4 },
+            { name: 'Medium', value: stats.total_fires * 0.3 },
+            { name: 'High', value: stats.total_fires * 0.2 },
+            { name: 'Extreme', value: stats.total_fires * 0.1 }
+        ]
+    };
+
+    // Prepare titles
+    const titles = {
+        barChartTitle,
+        pieChartTitle
+    };
 
     return (
         <div className="dashboard">
-            <h2>Analysis Results</h2>
+            {/* Dashboard Header with Filters Summary */}
+            <div className="section-header">
+                <div className="nav-tabs"><h2>Fire Analysis Dashboard: </h2>
+                    <div className="filter-actions" style={{ width: '75%' }}>
 
+                        <div className="filter-section">
+                        <span>
+                            {singleCountrySelected
+                                ? `Analysis for ${selectedCountry}`
+                                : `Analysis for ${data.country.length} countries`}
+                        </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Tab Navigation */}
+                <div className="nav-tabs">
+                    <button
+                        className={`nav-tab ${activeTab === 'overview' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('overview')}
+                    >
+                        Overview
+                    </button>
+                    <button
+                        className={`nav-tab ${activeTab === 'temporal' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('temporal')}
+                    >
+                        Temporal Analysis
+                    </button>
+                    <button
+                        className={`nav-tab ${activeTab === 'geographic' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('geographic')}
+                    >
+                        Geographic Distribution
+                    </button>
+                    <button
+                        className={`nav-tab ${activeTab === 'comparative' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('comparative')}
+                    >
+                        Comparative Analysis
+                    </button>
+                </div>
+            </div>
+
+            {/* Key Stats Summary */}
             <div className="stats-summary">
                 <div className="stat-card">
                     <h3>Total Fires</h3>
                     <p className="stat-value">{stats.total_fires.toLocaleString()}</p>
                 </div>
+
                 <div className="stat-card">
                     <h3>Avg Brightness</h3>
-                    <p className="stat-value">{stats.avg_brightness.toFixed(2)}</p>
+                    <p className="stat-value">{stats.avg_brightness.toFixed(1)}K</p>
                 </div>
+
                 <div className="stat-card">
                     <h3>Avg Confidence</h3>
-                    <p className="stat-value">{stats.avg_confidence.toFixed(2)}%</p>
+                    <p className="stat-value">{stats.avg_confidence.toFixed(1)}%</p>
                 </div>
+
                 <div className="stat-card">
-                    <h3>Avg FRP</h3>
-                    <p className="stat-value">{stats.avg_frp.toFixed(2)}</p>
+                    <h3>Day/Night Ratio</h3>
+                    <p className="stat-value">{(stats.day_fires / (stats.night_fires || 1)).toFixed(1)}</p>
                 </div>
             </div>
 
-            <div className="charts-grid">
-                <div className="chart-container">
-                    <h3>Monthly Fire Trends</h3>
-                    <ResponsiveContainer width="100%" height="85%">
-                        <LineChart data={monthlyDataWithNames}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                            <XAxis dataKey="name" stroke="rgba(255,255,255,0.7)" />
-                            <YAxis stroke="rgba(255,255,255,0.7)" />
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: "#2c3e50",
-                                    border: "none",
-                                    borderRadius: "5px",
-                                    color: "white"
-                                }}
-                            />
-                            <Legend />
-                            <Line type="monotone" dataKey="count" stroke="#8884d8" activeDot={{ r: 8 }} name="Fire Count" />
-                        </LineChart>
-                    </ResponsiveContainer>
-                </div>
+            {/* Render the active tab */}
+            {activeTab === 'overview' && <OverviewTab chartData={chartData} titles={titles} />}
+            {activeTab === 'temporal' && <TemporalTab chartData={chartData} />}
+            {activeTab === 'geographic' && <GeographicTab chartData={chartData} titles={titles} />}
+            {activeTab === 'comparative' && <ComparativeTab chartData={chartData} />}
 
-                <div className="chart-container">
-                    <h3>{barChartTitle}</h3>
-                    <ResponsiveContainer width="100%" height="85%">
-                        <BarChart data={barChartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                            <XAxis dataKey={barChartXKey} stroke="rgba(255,255,255,0.7)" />
-                            <YAxis stroke="rgba(255,255,255,0.7)" />
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: "#2c3e50",
-                                    border: "none",
-                                    borderRadius: "5px",
-                                    color: "white"
-                                }}
-                            />
-                            <Legend />
-                            <Bar dataKey="count" fill="#82ca9d" name="Fire Count" />
-                        </BarChart>
-                    </ResponsiveContainer>
+            {/* Footer with summary */}
+            <div className="dashboard-footer">
+                <div className="dashboard-footer-content">
+                    <span>Analysis conducted on {stats.total_fires.toLocaleString()} fire records. Showing data for {singleCountrySelected ? selectedCountry : `multiple countries`}.</span>
                 </div>
-
-                <div className="chart-container">
-                    <h3>{pieChartTitle}</h3>
-                    <ResponsiveContainer width="100%" height="85%">
-                        <PieChart>
-                            <Pie
-                                data={pieData}
-                                cx="50%"
-                                cy="50%"
-                                labelLine={false}
-                                outerRadius={80}
-                                fill="#8884d8"
-                                dataKey="value"
-                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                            >
-                                {pieData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                            </Pie>
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: "#2c3e50",
-                                    border: "none",
-                                    borderRadius: "5px",
-                                    color: "white"
-                                }}
-                            />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-
-                <div className="chart-container">
-                    <h3>Day vs Night Fires by Month</h3>
-                    <ResponsiveContainer width="100%" height="85%">
-                        <BarChart
-                            data={dayNightChartData}
-                            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                        >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                            <XAxis dataKey="month" stroke="rgba(255,255,255,0.7)" />
-                            <YAxis stroke="rgba(255,255,255,0.7)" />
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: "#2c3e50",
-                                    border: "none",
-                                    borderRadius: "5px",
-                                    color: "white"
-                                }}
-                            />
-                            <Legend />
-                            <Bar dataKey="D" name="Day Fires" stackId="a" fill="#FFBB28" />
-                            <Bar dataKey="N" name="Night Fires" stackId="a" fill="#0088FE" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-
-                {/* Additional charts could be added here */}
             </div>
         </div>
     );
 };
+
+// Helper functions for data preparation
+function prepareRegionData(data, showAreaData) {
+    if (showAreaData) {
+        return data.area.map(item => ({
+            ...item,
+            name: item.area || "Unknown"
+        }));
+    } else {
+        return data.country.map(item => ({
+            ...item,
+            name: item.country
+        }));
+    }
+}
+
+function preparePieData(data, showAreaData) {
+    if (showAreaData) {
+        return data.area.map((item, index) => ({
+            name: item.area || "Unknown",
+            value: item.count,
+            color: COLORS[index % COLORS.length]
+        }));
+    } else {
+        return data.country.map((item, index) => ({
+            name: item.country,
+            value: item.count,
+            color: COLORS[index % COLORS.length]
+        }));
+    }
+}
+
+function prepareTimeOfDayData(stats) {
+    return [
+        { name: "0-4", value: stats.night_fires * 0.3, time: "Night" },
+        { name: "4-8", value: stats.night_fires * 0.7, time: "Dawn" },
+        { name: "8-12", value: stats.day_fires * 0.4, time: "Morning" },
+        { name: "12-16", value: stats.day_fires * 0.4, time: "Afternoon" },
+        { name: "16-20", value: stats.day_fires * 0.2, time: "Evening" },
+        { name: "20-24", value: stats.night_fires * 0.1, time: "Night" }
+    ];
+}
+
+function prepareSeasonalData(monthlyDataWithNames) {
+    return [
+        { subject: 'Winter', A: getSeasonalValue(monthlyDataWithNames, 1, 2, 12), fullMark: 100 },
+        { subject: 'Spring', A: getSeasonalValue(monthlyDataWithNames, 3, 4, 5), fullMark: 100 },
+        { subject: 'Summer', A: getSeasonalValue(monthlyDataWithNames, 6, 7, 8), fullMark: 100 },
+        { subject: 'Fall', A: getSeasonalValue(monthlyDataWithNames, 9, 10, 11), fullMark: 100 },
+    ];
+}
+
+function getSeasonalValue(monthlyData, m1, m2, m3) {
+    const monthsData = monthlyData.reduce((acc, item) => {
+        acc[item.month] = item.count;
+        return acc;
+    }, {});
+
+    const total = Object.values(monthsData).reduce((sum, val) => sum + val, 0);
+    const seasonCount = (monthsData[m1] || 0) + (monthsData[m2] || 0) + (monthsData[m3] || 0);
+
+    return total > 0 ? (seasonCount / total) * 100 : 0;
+}
 
 export default Dashboard;

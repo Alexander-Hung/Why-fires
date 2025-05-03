@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import '../styles/DateFilter.css';
 
 export const DateFilter = ({
                                expanded,

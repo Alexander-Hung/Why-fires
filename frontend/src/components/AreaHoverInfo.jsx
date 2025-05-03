@@ -1,4 +1,5 @@
 import React from 'react';
+import '../styles/AreaHoverInfo.css';
 
 /**
  * Component to display area information on hover

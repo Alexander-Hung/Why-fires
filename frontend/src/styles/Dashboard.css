@@ -1,0 +1,178 @@
+@import './common.css';
+
+/* Dashboard Styles - with fixed chart container display */
+.dashboard {
+    color: white;
+    font-size: 14px;
+    width: 100%;
+}
+
+.dashboard h2 {
+    margin-top: 0;
+    font-size: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.stats-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background-color: var(--primaryColor);
+    border-radius: 5px;
+    padding: 10px;
+    text-align: center;
+}
+
+.stat-card h3 {
+    margin-top: 0;
+    margin-bottom: 5px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 0;
+}
+
+/* Improved chart grid layout */
+.charts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    width: 100%;
+    padding-bottom: 20px; /* Add padding to prevent cutoff */
+}
+
+/* FIXED: Chart container to properly display charts */
+.chart-container {
+    background-color: var(--primaryColor);
+    border-radius: 5px;
+    padding: 15px;
+    height: auto; /* Changed from fixed height to auto */
+    min-height: 320px; /* Set minimum height instead */
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    overflow: hidden; /* Prevent overflow issues */
+    box-sizing: border-box;
+}
+
+.chart-container h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 14px;
+    text-align: center;
+    flex-shrink: 0; /* Prevent title from shrinking */
+}
+
+/* Make sure ResponsiveContainer takes remaining space */
+.chart-container > div {
+    flex-grow: 1;
+    width: 100% !important; /* Force width to 100% */
+    height: calc(100% - 30px) !important; /* Height minus title space */
+}
+
+/* Dashboard Container */
+.dashboard-container {
+    padding: 20px;
+    color: white;
+    max-height: 100%;
+    overflow-y: auto;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Make sure charts inside dashboard have proper space */
+.dashboard-container .charts-grid {
+    width: 100%;
+}
+
+/* Dashboard footer */
+.dashboard-footer {
+    background-color: var(--primaryColor);
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 20px;
+    width: 100%;
+}
+
+.dashboard-footer-content {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Tab navigation styles */
+.nav-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    margin-bottom: 15px;
+    width: 100%;
+    overflow-x: auto; /* Allow scrolling if tabs don't fit */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.nav-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.nav-tab {
+    padding: 10px 15px;
+    font-weight: 500;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    white-space: nowrap; /* Prevent wrapping tab text */
+}
+
+.nav-tab:hover {
+    color: white;
+}
+
+.nav-tab.active {
+    color: var(--toggleColor);
+    border-bottom: 2px solid var(--toggleColor);
+}
+
+/* Make sure dashboard content fits properly */
+.dashboard-container {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+/* Top section styles for chart headers */
+.topSection {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.topButton {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+/* Fix for recharts components */
+.recharts-wrapper {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.recharts-surface {
+    overflow: visible;
+}

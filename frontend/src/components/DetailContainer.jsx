@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import '../styles/DetailContainer.css';
 
 export const DetailContainer = ({ content, onClose }) => {
     const [position, setPosition] = useState({ x: 15, y: 15 });

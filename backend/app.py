@@ -941,7 +941,9 @@ def stop_analysis():
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze_data():
-    """Filter and analyze data based on provided criteria"""
+    """
+    Start an asynchronous analysis job and return the session ID immediately
+    """
     global should_stop_analysis
     should_stop_analysis = False  # Reset at the start
 
@@ -955,92 +957,128 @@ def analyze_data():
         # Initial progress
         progress_update(0, session_id)
 
-        # Return the session ID to the client for progress tracking
-        response_data = {
-            "session_id": session_id
-        }
+        # Start a background thread to do the actual processing
+        def background_processing():
+            try:
+                # Simulate first step of processing
+                time.sleep(1)
+                progress_update(25, session_id)
 
-        # Start the actual processing
-        # Simulate processing time for progress bar
-        time.sleep(1)  # Simulating 25% progress
-        progress_update(25, session_id)
+                # Check if we should stop
+                if should_stop_analysis:
+                    progress_update(0, session_id)  # Reset progress
+                    return
 
-        # Check if we should stop
-        if should_stop_analysis:
-            progress_update(0, session_id)  # Reset progress
-            return jsonify({"success": False, "error": "Analysis was stopped by user", **response_data})
+                # Load data based on selected years
+                years = filters.get('years', [])
+                if not years:
+                    # If no years selected, use all years
+                    parquet_files = glob.glob(os.path.join(DATA_FOLDER, "*.parquet"))
+                    years = [os.path.splitext(os.path.basename(file))[0] for file in parquet_files]
 
-        # Load data based on selected years
-        years = filters.get('years', [])
-        if not years:
-            # If no years selected, use all years
-            parquet_files = glob.glob(os.path.join(DATA_FOLDER, "*.parquet"))
-            years = [os.path.splitext(os.path.basename(file))[0] for file in parquet_files]
+                # Initialize an empty DataFrame to store the combined data
+                all_data = pd.DataFrame()
 
-        # Initialize an empty DataFrame to store the combined data
-        all_data = pd.DataFrame()
+                # For each selected year, load and filter the data
+                for i, year in enumerate(years):
+                    # Check if we should stop
+                    if should_stop_analysis:
+                        progress_update(0, session_id)  # Reset progress
+                        return
 
-        # For each selected year, load and filter the data
-        for i, year in enumerate(years):
-            # Check if we should stop
-            if should_stop_analysis:
-                progress_update(0, session_id)  # Reset progress
-                return jsonify({"success": False, "error": "Analysis was stopped by user", **response_data})
+                    file_path = os.path.join(DATA_FOLDER, f"{year}.parquet")
+                    if os.path.exists(file_path):
+                        df = pd.read_parquet(file_path)
 
-            file_path = os.path.join(DATA_FOLDER, f"{year}.parquet")
-            if os.path.exists(file_path):
-                df = pd.read_parquet(file_path)
+                        time.sleep(0.5)  # Simulate processing time
+                        current_progress = 25 + (i + 1) * 50 // len(years)
+                        progress_update(current_progress, session_id)
 
-                time.sleep(0.5)  # Simulate processing time
-                current_progress = 25 + (i + 1) * 50 // len(years)
-                progress_update(current_progress, session_id)
+                        # Apply filters
+                        df = apply_filters(df, filters)
 
-                # Apply filters
-                df = apply_filters(df, filters)
+                        # Append to the combined data
+                        all_data = pd.concat([all_data, df])
 
-                # Append to the combined data
-                all_data = pd.concat([all_data, df])
+                if all_data.empty:
+                    progress_update(100, session_id)  # Set to complete
+                    # No need to store results for empty data
+                    return
 
-        if all_data.empty:
-            progress_update(100, session_id)  # Set to complete
-            return jsonify({
-                "success": True,
-                "message": "No data found matching the criteria",
-                "data": {},
-                "stats": {},
-                **response_data
-            })
+                # Check if we should stop
+                if should_stop_analysis:
+                    progress_update(0, session_id)  # Reset progress
+                    return
 
-        # Check if we should stop
-        if should_stop_analysis:
-            progress_update(0, session_id)  # Reset progress
-            return jsonify({"success": False, "error": "Analysis was stopped by user", **response_data})
+                # Sleep for another second to simulate processing
+                time.sleep(1)
+                progress_update(90, session_id)
+                print(f"Analysis 90% complete for session {session_id}")
 
-        # Sleep for another second to simulate processing
-        time.sleep(1)
-        progress_update(90, session_id)
-        print(f"Analysis 90% complete for session {session_id}")
+                # Generate statistics and analysis results
+                results = generate_analysis(all_data)
 
-        # Generate statistics and analysis results
-        results = generate_analysis(all_data)
+                # Store results in a global dictionary
+                # We need to store the results so they can be retrieved later
+                global analysis_results_storage
+                if not hasattr(app, 'analysis_results_storage'):
+                    app.analysis_results_storage = {}
 
-        # Final processing
-        progress_update(100, session_id)
-        print(f"Analysis 100% complete for session {session_id}")
+                app.analysis_results_storage[session_id] = {
+                    "success": True,
+                    "message": "Analysis completed successfully",
+                    "data": results["data"],
+                    "stats": results["stats"]
+                }
 
+                # Final processing
+                progress_update(100, session_id)
+                print(f"Analysis 100% complete for session {session_id}")
+
+            except Exception as e:
+                print(f"Error in background processing for session {session_id}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                progress_update(0, session_id)  # Reset progress on error
+
+        # Start the background thread
+        thread = threading.Thread(target=background_processing)
+        thread.daemon = True  # Daemon thread will be killed when the main process exits
+        thread.start()
+
+        # Return the session ID immediately so the client can start tracking progress
         return jsonify({
             "success": True,
-            "message": "Analysis completed successfully",
-            "data": results["data"],
-            "stats": results["stats"],
-            **response_data
+            "message": "Analysis started. Use session_id to track progress and get results.",
+            "session_id": session_id
         })
+
     except Exception as e:
-        print(f"Error in analyze_data for session {session_id}: {str(e)}")
+        print(f"Error starting analysis for session {session_id}: {str(e)}")
         import traceback
         traceback.print_exc()
         progress_update(0, session_id)  # Reset progress on error
         return jsonify({"success": False, "error": str(e), "session_id": session_id}), 500
+
+
+# Add a new endpoint to retrieve analysis results
+@app.route('/api/analysis_results/<session_id>', methods=['GET'])
+def get_analysis_results(session_id):
+    """
+    Retrieve the results of a completed analysis
+    """
+    # Make sure the storage exists
+    if not hasattr(app, 'analysis_results_storage'):
+        app.analysis_results_storage = {}
+
+    # Check if results are available for this session
+    if session_id in app.analysis_results_storage:
+        return jsonify(app.analysis_results_storage[session_id])
+    else:
+        return jsonify({
+            "success": False,
+            "message": "Results not found or analysis still in progress"
+        }), 404
 
 # ---------------------------------------------------
 # Endpoint: API Testing

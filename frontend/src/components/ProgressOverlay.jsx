@@ -1,4 +1,5 @@
 import React from 'react';
+import '../styles/ProgressOverlay.css';
 
 export const ProgressOverlay = ({ progress, phase }) => {
     return (

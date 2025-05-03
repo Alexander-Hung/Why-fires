@@ -5,7 +5,8 @@ import { RightSidebar } from './components/RightSidebar';
 import { DownloadOverlay } from './components/DownloadOverlay';
 import { ColorRangeBar } from './components/ColorRangeBar';
 import Map from './components/Map';
-import './stylesheet.css';
+import './styles/App.css';
+import './styles/resizing.css';
 
 // Apply global styles to prevent scrolling
 document.body.style.margin = '0';
@@ -59,6 +60,20 @@ const App = () => {
 
     // Refs
     const eventSourceRef = useRef(null);
+
+    const [analysisSessionId, setAnalysisSessionId] = useState(null);
+    const [progressEventSource, setProgressEventSource] = useState(null);
+
+    useEffect(() => {
+        // Cleanup function that runs when component unmounts
+        return () => {
+            // Close any open event source
+            if (progressEventSource) {
+                console.log("Cleaning up progress event source");
+                progressEventSource.close();
+            }
+        };
+    }, [progressEventSource]);
 
     // Fetch countries data on load
     useEffect(() => {
@@ -384,30 +399,17 @@ const App = () => {
             });
     };
 
-    // Updated handleAnalyze and handleStopAnalyze functions for App.jsx
-
-// Add this state to your existing state declarations
-    const [analysisSessionId, setAnalysisSessionId] = useState(null);
-    const [progressEventSource, setProgressEventSource] = useState(null);
-
-    useEffect(() => {
-        // Cleanup function that runs when component unmounts
-        return () => {
-            // Close any open event source
-            if (progressEventSource) {
-                console.log("Cleaning up progress event source");
-                progressEventSource.close();
-            }
-        };
-    }, [progressEventSource]);
-
     const handleAnalyze = (filters) => {
         setAnalyzeLoading(true);
         setAnalyzeProgress(0);
 
+        // Clear previous analysis results
+        setAnalysisResults(null);
+
         // Clean up any existing event source
         if (progressEventSource) {
             progressEventSource.close();
+            setProgressEventSource(null);
         }
 
         // Open right sidebar if not already open
@@ -417,7 +419,7 @@ const App = () => {
 
         console.log("Starting analysis...");
 
-        // Make API call to the backend
+        // Make API call to start the analysis
         fetch('http://localhost:5000/api/analyze', {
             method: 'POST',
             headers: {
@@ -433,7 +435,7 @@ const App = () => {
                     setAnalysisSessionId(sessionId);
                     console.log(`Analysis started with session ID: ${sessionId}`);
 
-                    // Start listening for progress updates using the session ID
+                    // Set up event source for progress tracking
                     const eventSource = new EventSource(`http://localhost:5000/api/progress/${sessionId}`);
                     setProgressEventSource(eventSource);
 
@@ -444,24 +446,38 @@ const App = () => {
                             console.log(`Progress update received: ${eventData.progress}%`);
                             setAnalyzeProgress(eventData.progress);
 
-                            // If processing is complete
+                            // If processing is complete (progress = 100%)
                             if (eventData.progress >= 100) {
-                                console.log("Analysis complete");
-
-                                // Update analysis results
-                                setAnalysisResults(data);
+                                console.log("Analysis complete, fetching results");
 
                                 // Close the event source
                                 eventSource.close();
                                 setProgressEventSource(null);
 
-                                // Reset loading state after a short delay
-                                setTimeout(() => {
-                                    setAnalyzeLoading(false);
-                                }, 500);
+                                // Fetch the analysis results
+                                fetch(`http://localhost:5000/api/analysis_results/${sessionId}`)
+                                    .then(response => response.json())
+                                    .then(resultsData => {
+                                        if (resultsData.success) {
+                                            // Update analysis results
+                                            setAnalysisResults(resultsData);
+                                            console.log("Analysis results received:", resultsData);
+                                        } else {
+                                            console.error("Failed to get analysis results:", resultsData.message);
+                                        }
+
+                                        // Reset loading state after a short delay
+                                        setTimeout(() => {
+                                            setAnalyzeLoading(false);
+                                        }, 500);
+                                    })
+                                    .catch(err => {
+                                        console.error("Error fetching analysis results:", err);
+                                        setAnalyzeLoading(false);
+                                    });
                             }
 
-                            // If processing was stopped
+                            // If processing was stopped (progress = 0)
                             if (eventData.progress === 0 && analyzeLoading) {
                                 console.log("Analysis was stopped");
 
@@ -494,36 +510,15 @@ const App = () => {
                         }
                     };
 
-                    // Update analysis results right away (will show when processing completes)
-                    setAnalysisResults(data);
-
                 } else {
                     // Handle error from analysis
                     console.error("Analysis failed:", data.error);
-
-                    // Close any open event source
-                    if (progressEventSource) {
-                        progressEventSource.close();
-                        setProgressEventSource(null);
-                    }
-
-                    // Reset states
                     setAnalyzeLoading(false);
-                    setAnalyzeProgress(0);
                 }
             })
             .catch(err => {
                 console.error('Error connecting to the server:', err);
-
-                // Close any open event source
-                if (progressEventSource) {
-                    progressEventSource.close();
-                    setProgressEventSource(null);
-                }
-
-                // Reset states
                 setAnalyzeLoading(false);
-                setAnalyzeProgress(0);
             });
     };
 
@@ -602,7 +597,6 @@ const App = () => {
             });
     };
 
-    // Update this function in your App.jsx file
     const toggleAreaRisk = (country) => {
         // If a specific country is provided, use it for displaying area risk
         // Otherwise use the currently selected country
@@ -662,7 +656,7 @@ const App = () => {
                         onToggleAreaRisk={toggleAreaRisk}
                         predictionAvailable={predictionData !== null}
                         onAnalyze={handleAnalyze}
-                        onStopAnalyze={handleStopAnalyze} // Add this line
+                        onStopAnalyze={handleStopAnalyze}
                         analyzeLoading={analyzeLoading}
                         analyzeProgress={analyzeProgress}
                     />

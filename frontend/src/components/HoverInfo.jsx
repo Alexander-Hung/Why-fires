@@ -1,4 +1,5 @@
 import React from 'react';
+import '../styles/HoverInfo.css';
 
 const HoverInfo = ({ info, position, color }) => {
     if (!info) return null;

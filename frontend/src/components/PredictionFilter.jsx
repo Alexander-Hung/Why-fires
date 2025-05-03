@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import '../styles/PredictionFilter.css';
 
 export const PredictionFilter = ({
                                      expanded,

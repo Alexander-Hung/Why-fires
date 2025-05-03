@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import '../styles/DownloadOverlay.css';
 
 export const DownloadOverlay = ({ onComplete }) => {
     const [progress, setProgress] = useState(0);

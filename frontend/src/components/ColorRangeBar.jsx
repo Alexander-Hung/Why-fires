@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import '../styles/ColorRangeBar.css';
 
 export const ColorRangeBar = ({ minValue, maxValue, hidden }) => {
     const [gradientStyle, setGradientStyle] = useState({});

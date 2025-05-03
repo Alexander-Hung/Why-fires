@@ -1,4 +1,5 @@
 import React from 'react';
+import '../styles/PredictionResults.css';
 
 export const PredictionResults = ({ predictionData }) => {
     if (!predictionData) return null;

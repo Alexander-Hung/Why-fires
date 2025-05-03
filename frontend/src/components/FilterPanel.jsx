@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { PredictionFilter } from './PredictionFilter';
 import ProgressBar from './ProgressBar';
+import '../styles/FilterPanel.css';
 
 const FilterPanel = ({
                        years,
@@ -117,6 +118,22 @@ const FilterPanel = ({
 
   return (
       <div>
+        {/* Prediction Filter with Area Risk button inside */}
+        <PredictionFilter
+            expanded={expanded}
+            toggleExpand={toggleExpand}
+            onStartPrediction={onStartPrediction}
+            countries={countries}
+            selectedCountry={selectedCountry}
+            showAreaRisk={showAreaRisk}
+            onToggleAreaRisk={onToggleAreaRisk}
+            predictionAvailable={predictionAvailable}
+        />
+
+        <br />
+        <hr />
+
+        <div><h2>Analysis:</h2></div>
         <div className="filter-panel">
           <form onSubmit={handleSubmit}>
             <div className="filter-section">
@@ -355,18 +372,6 @@ const FilterPanel = ({
               <ProgressBar progress={analyzeProgress} />
             </div>
         )}
-
-        {/* Prediction Filter with Area Risk button inside */}
-        <PredictionFilter
-            expanded={expanded}
-            toggleExpand={toggleExpand}
-            onStartPrediction={onStartPrediction}
-            countries={countries}
-            selectedCountry={selectedCountry}
-            showAreaRisk={showAreaRisk}
-            onToggleAreaRisk={onToggleAreaRisk}
-            predictionAvailable={predictionAvailable}
-        />
 
         <br />
       </div>

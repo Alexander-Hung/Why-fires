@@ -1,0 +1,13 @@
+@import './common.css';
+
+/* Hover info */
+#hoverInfo {
+    font-weight: bold;
+    position: absolute;
+    display: block;
+    border: 2px solid black;
+    padding: 5px;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}

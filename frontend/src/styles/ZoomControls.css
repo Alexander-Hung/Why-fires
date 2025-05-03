@@ -1,0 +1,36 @@
+@import './common.css';
+
+/* Zoom controls */
+.zoom-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.zoom-control-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    background-color: rgba(60, 63, 65, 0.9);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    user-select: none;
+}
+
+.zoom-control-button:hover {
+    background-color: rgba(80, 83, 85, 0.9);
+}
+
+.zoom-control-button:active {
+    transform: scale(0.95);
+}

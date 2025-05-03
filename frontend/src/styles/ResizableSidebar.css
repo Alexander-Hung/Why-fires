@@ -1,0 +1,200 @@
+@import './common.css';
+
+/* Resizable sidebar with fixed positioning for toggle button */
+.resizable-sidebar {
+    position: fixed;
+    height: 100vh;
+    top: 0;
+    left: 0;
+    background-color: rgba(60, 63, 65, 0.9);
+    transition: transform 0.5s ease;
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    color: white;
+    overflow-y: auto;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.resizable-sidebar::-webkit-scrollbar {
+    display: none;
+}
+
+.resizable-sidebar.right {
+    left: auto;
+    right: 0;
+    transform: translateX(100%);
+    border-radius: 5px 0 0 5px;
+}
+
+.resizable-sidebar.right.is-open {
+    transform: translateX(0);
+}
+
+.resizable-sidebar.left.is-closed {
+    transform: translateX(-100%);
+}
+
+/* Resize handle */
+.resize-handle {
+    position: absolute;
+    width: 10px;
+    height: 100%;
+    cursor: ew-resize;
+    background-color: transparent;
+    z-index: 101;
+    /* Highlight area on hover with subtle visual cue */
+}
+
+.resize-handle:hover {
+    background-color: rgba(243, 156, 18, 0.2);
+}
+
+.resize-handle.left {
+    right: 0;
+    top: 0;
+}
+
+.resize-handle.right {
+    left: 0;
+    top: 0;
+}
+
+.resize-handle.active {
+    background-color: rgba(243, 156, 18, 0.3);
+}
+
+/* ==== IMPORTANT: Fixed toggle button styles ==== */
+.sidebar-toggle {
+    width: 40px;
+    height: 60px;
+    position: fixed; /* Changed from absolute to fixed */
+    top: 48%;
+    cursor: pointer;
+    border: none;
+    color: white;
+    background-color: rgba(60, 63, 65, 0.9);
+    z-index: 99; /* Make sure it's visible */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.5s ease, left 0.5s ease, right 0.5s ease; /* Smooth transition for all properties */
+}
+
+/* Position toggle buttons */
+.sidebar-toggle.left {
+    border-radius: 0 5px 5px 0;
+    left: 0; /* Default position when closed */
+}
+
+.sidebar-toggle.left.is-open {
+    left: calc(var(--sidebar-width, 320px) - 0px); /* Position at edge of sidebar when open */
+}
+
+.sidebar-toggle.right {
+    border-radius: 5px 0 0 5px;
+    right: 0; /* Default position when closed */
+}
+
+.sidebar-toggle.right.is-open {
+    right: calc(var(--sidebar-width, 600px) - 0px); /* Position at edge of sidebar when open */
+}
+
+/* Icon transitions */
+.sidebar-toggle .icon-open {
+    display: none;
+}
+
+.sidebar-toggle .icon-close {
+    display: initial;
+}
+
+.sidebar-toggle:not(.is-open) .icon-open {
+    display: initial;
+}
+
+.sidebar-toggle:not(.is-open) .icon-close {
+    display: none;
+}
+
+/* Content area */
+.sidebar-content {
+    height: 100%;
+    padding: 1em;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+}
+
+.sidebar-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Footer for left sidebar */
+.sidebar-footer {
+    width: 100%;
+    padding: 1em;
+    position: absolute;
+    bottom: 0;
+    transition: transform 0.5s ease;
+    z-index: 101;
+    box-sizing: border-box; /* Ensure padding is included in width */
+}
+
+.sidebar-footer.is-closed {
+    transform: translateX(-100%);
+}
+
+/* Ensure the min/max width constraints */
+.resizable-sidebar.left {
+    min-width: 250px;
+    max-width: 500px;
+}
+
+.resizable-sidebar.right {
+    min-width: 300px;
+    max-width: 1200px;
+}
+
+/* Ensure all content within the sidebar adapts to its width */
+.resizable-sidebar * {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Ensure images scale proportionally */
+.resizable-sidebar img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Ensure text wraps instead of overflowing */
+.resizable-sidebar p,
+.resizable-sidebar h1,
+.resizable-sidebar h2,
+.resizable-sidebar h3,
+.resizable-sidebar h4,
+.resizable-sidebar h5,
+.resizable-sidebar h6,
+.resizable-sidebar div,
+.resizable-sidebar span {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}

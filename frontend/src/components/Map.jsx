@@ -3,6 +3,7 @@ import Plotly from 'plotly.js-dist-min';
 import HoverInfo from './HoverInfo';
 import AreaHoverInfo from './AreaHoverInfo';
 import ZoomControls from './ZoomControls';
+import '../styles/Map.css';
 
 const Map = ({
                  filteredData,
