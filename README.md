@@ -1,6 +1,6 @@
-# Wildfire Forecasting (Why-Fires)
+# Why-Fires
 
-A full-stack application that uses NASA FIRMS MODIS data and GADM boundary data to visualize and forecast wildfire occurrences across different countries. This project leverages:
+A full-stack application that uses NASA FIRMS MODIS and GADM boundary data to visualize to provide insightful and statistical analysis of wildfires. This project leverages:
 - **Flask** (Python) for the backend
 - **Ract.js** / plain JS (and Plotly on the client) for the frontend
 - **Statsmodels** SARIMA for time series forecasting
