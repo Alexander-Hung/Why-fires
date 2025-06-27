@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import '../styles/DownloadOverlay.css';
 
+const base = process.env.REACT_APP_API_BASE;
+
 export const DownloadOverlay = ({ onComplete }) => {
     const [progress, setProgress] = useState(0);
     const [message, setMessage] = useState('Click the button below to download and convert data from R2.');
@@ -20,7 +22,7 @@ export const DownloadOverlay = ({ onComplete }) => {
     }, []);
 
     const checkDataStatus = () => {
-        fetch('http://localhost:5000/api/check_data')
+        fetch(`${base}/api/check_data`)
             .then(response => response.json())
             .then(result => {
                 updateFileStatusUI(result.combined_exists, result.model_exists);
@@ -51,7 +53,7 @@ export const DownloadOverlay = ({ onComplete }) => {
         setMessage('Starting downloads...');
 
         // Start the download process
-        const url = 'http://localhost:5000/api/download_all';
+        const url = `${base}/api/download_all`;
 
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
@@ -94,7 +96,7 @@ export const DownloadOverlay = ({ onComplete }) => {
         setProgress(0);
         setMessage('Starting model download...');
 
-        const url = 'http://localhost:5000/api/download_model';
+        const url = `${base}/api/download_model`;
 
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
@@ -119,7 +121,7 @@ export const DownloadOverlay = ({ onComplete }) => {
                     eventSourceRef.current = null;
 
                     // Refresh file status
-                    fetch('http://localhost:5000/api/check_data')
+                    fetch(`${base}/api/check_data`)
                         .then(response => response.json())
                         .then(result => {
                             updateFileStatusUI(result.combined_exists, result.model_exists);
@@ -149,7 +151,7 @@ export const DownloadOverlay = ({ onComplete }) => {
     const startDataConversion = () => {
         setMessage('Starting conversion process...');
 
-        const url = 'http://localhost:5000/api/convert_data';
+        const url = `${base}/api/convert_data`;
 
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
@@ -171,7 +173,7 @@ export const DownloadOverlay = ({ onComplete }) => {
                 // When conversion completes
                 if ((data.phase === 'complete' || data.phase === 'done') && data.progress === 100) {
                     // Set the DATA_SETUP flag to true
-                    fetch('http://localhost:5000/api/set_data_setup', {
+                    fetch(`${base}/api/set_data_setup`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ data_setup: true })

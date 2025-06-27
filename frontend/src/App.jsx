@@ -9,6 +9,7 @@ import './styles/App.css';
 import './styles/resizing.css';
 
 // Apply global styles to prevent scrolling
+const base = process.env.REACT_APP_API_BASE;
 document.body.style.margin = '0';
 document.body.style.padding = '0';
 document.body.style.overflow = 'hidden'; // Prevent scrolling on the body
@@ -77,7 +78,7 @@ const App = () => {
 
     // Fetch countries data on load
     useEffect(() => {
-        fetch('http://165.227.70.245:5000/api/countriesMeta')
+        fetch(`${base}/api/countriesMeta`)
             .then(response => response.json())
             .then(data => {
                 setCountriesData(data);
@@ -121,7 +122,7 @@ const App = () => {
     }, []);
 
     const fetchCountries = (year) => {
-        const url = `http://165.227.70.245:5000/api/countries?year=${year}`;
+        const url = `${base}/api/countries?year=${year}`;
         fetch(url)
             .then(response => response.json())
             .then(data => {
@@ -134,7 +135,7 @@ const App = () => {
 
     const loadData = () => {
         const country = selectedCountry.replace(/\s/g, '_');
-        const url = `http://165.227.70.245:5000/api/data?year=${selectedYear}&country=${encodeURIComponent(country)}`;
+        const url = `${base}/api/data?year=${selectedYear}&country=${encodeURIComponent(country)}`;
 
         fetch(url)
             .then(response => response.json())
@@ -219,7 +220,7 @@ const App = () => {
             acq_time: pointData.acq_time.toString()
         };
 
-        fetch('http://165.227.70.245:5000/api/detail', {
+        fetch(`${base}/api/detail`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(bodyData)
@@ -360,7 +361,7 @@ const App = () => {
         }, 200);
 
         // Call the new API endpoint with today's date
-        fetch('http://165.227.70.245:5000/api/predict', {
+        fetch(`${base}/api/predict`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -420,7 +421,7 @@ const App = () => {
         console.log("Starting analysis...");
 
         // Make API call to start the analysis
-        fetch('http://165.227.70.245:5000/api/analyze', {
+        fetch(`${base}/api/analyze`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -436,7 +437,7 @@ const App = () => {
                     console.log(`Analysis started with session ID: ${sessionId}`);
 
                     // Set up event source for progress tracking
-                    const eventSource = new EventSource(`http://165.227.70.245:5000/api/progress/${sessionId}`);
+                    const eventSource = new EventSource(`${base}/api/progress/${sessionId}`);
                     setProgressEventSource(eventSource);
 
                     // Handle progress updates
@@ -455,7 +456,7 @@ const App = () => {
                                 setProgressEventSource(null);
 
                                 // Fetch the analysis results
-                                fetch(`http://165.227.70.245:5000/api/analysis_results/${sessionId}`)
+                                fetch(`${base}/api/analysis_results/${sessionId}`)
                                     .then(response => response.json())
                                     .then(resultsData => {
                                         if (resultsData.success) {
@@ -532,7 +533,7 @@ const App = () => {
         console.log("Sending stop request...");
 
         // Call the stop endpoint
-        fetch('http://165.227.70.245:5000/api/analyze/stop', {
+        fetch(`${base}/api/analyze/stop`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -569,14 +570,14 @@ const App = () => {
 
     const checkDataAvailability = () => {
         // First check if data is already set up
-        fetch('http://165.227.70.245:5000/api/data_setup')
+        fetch(`${base}/api/data_setup`)
             .then(response => response.json())
             .then(result => {
                 if (result.data_setup === true) {
                     setShowDownloadOverlay(false);
                 } else {
                     // Check if data files exist
-                    fetch('http://165.227.70.245:5000/api/check_data')
+                    fetch(`${base}/api/check_data`)
                         .then(response => response.json())
                         .then(result => {
                             if (result.modis_exists) {

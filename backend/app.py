@@ -20,7 +20,14 @@ load_dotenv()
 
 
 app = Flask(__name__, template_folder='public')
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "http://165.227.70.245:3000",
+            "http://localhost:3000"
+        ]
+    }
+})
 
 CPU_THRESHOLD = float(os.getenv("CPU_THRESHOLD", "25"))
 MEMORY_THRESHOLD_GB = float(os.getenv("MEMORY_THRESHOLD_GB", "8"))
@@ -1094,4 +1101,4 @@ def prediction():
 
 if __name__ == '__main__':
     os.makedirs(os.path.join('data', 'modis'), exist_ok=True)
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

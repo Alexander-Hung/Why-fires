@@ -6,6 +6,8 @@ import { DataCount } from './DataCount';
 import FilterPanel from './FilterPanel';
 import '../styles/Sidebar.css';
 
+const base = process.env.REACT_APP_API_BASE;
+
 export const Sidebar = ({
                             isOpen,
                             onToggle,
@@ -43,7 +45,7 @@ export const Sidebar = ({
 
     // Fetch available years when component mounts
     useEffect(() => {
-        fetch('http://localhost:5000/api/analyze/years')
+        fetch(`${base}/api/analyze/years`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
