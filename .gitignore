@@ -13,3 +13,4 @@ frontend/why-fires_com.crt
 frontend/why-fires_com.pem
 /frontend/build
 /frontend/public/.well-known
+/frontend/build
